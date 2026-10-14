@@ -7,8 +7,12 @@ build() {
   add_module aop
   add_module aop_als
   add_module mt7932-fullmac
-  add_file /usr/lib/firmware/mediatek/mt7932/policy/US.bin
-  add_file /usr/lib/firmware/mediatek/mt7932/policy/world-XZ.bin
+  # The policies come with the image, not a package; a missing one must not fail
+  # the build. aurora-peripheral-firmware.sh then defers the radio instead.
+  local policy
+  for policy in /usr/lib/firmware/mediatek/mt7932/policy/{US,world-XZ}.bin; do
+    [[ ! -e $policy ]] || add_file "$policy"
+  done
   add_file /usr/lib/modprobe.d/aurora-firmware-order.conf
   add_file /usr/lib/omarchy/initcpio/aurora-peripheral-firmware.sh
   add_file /usr/lib/systemd/system/aurora-peripheral-firmware.service

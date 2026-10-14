@@ -3,14 +3,16 @@ pkgver=20261014
 pkgrel=1
 pkgdesc='Order Apple peripheral admission after device firmware extraction'
 arch=('aarch64')
+groups=('omarchy-platform-apple-silicon')
 license=('MIT')
 url='https://github.com/aurora-silicon/omarchy-mac'
-depends=('kmod' 'omarchy-mac-boot' 'linux-aurora>=7.1.12.aurora5')
+depends=('bash' 'iw' 'kmod' 'omarchy-mac-boot' 'linux-aurora>=7.1.12.aurora5')
 source=(aurora-firmware-order.conf aurora-peripheral-firmware.sh
         aurora-peripheral-firmware.service aurora-vendor-order.install
         95-aurora-vendor-order.conf aurora-vendor-order-cryptsetup.conf
-        20-aurora-vendor-order.conf)
-sha256sums=('e6338787cc03c7704589df20f7551ac17bc2ae25aa2f8df3b6d9532a1c5b79f9' '70f1fcc7890963fe9d7efda0da6f917557a7278371586c4fc2962c1b1c7cc197' '328c689685f21bb760f3bea7984b42060a04f6a386d4a35b8237de95328ccc31' '94f028f9537b69ddc7c3eed03586718066132b7cd18b0b7ed5e98ca3e1308195' '8ef54ee9d0f438864f2a99bbb8c0cf53aa8b7e0e217bd74b2fd324ff0b882a32' '298c2abc4c0e11ab03470209b4ff93c184eed40d3cf9e1913e41ba0ea0179837' 'e200d1cf003d60eca4a825aec9475f36dd8db6a5a8805eaac93e3fecfa0b3cb0')
+        20-aurora-vendor-order.conf aurora-regdom-fallback
+        aurora-regdom-fallback.service 86-aurora-regdom-fallback.rules)
+sha256sums=('e6338787cc03c7704589df20f7551ac17bc2ae25aa2f8df3b6d9532a1c5b79f9' '70f1fcc7890963fe9d7efda0da6f917557a7278371586c4fc2962c1b1c7cc197' '328c689685f21bb760f3bea7984b42060a04f6a386d4a35b8237de95328ccc31' '2747dcac56d8a7b631add820b07b931c44b92c3112fbd697c2c5d2a6896df888' '8ef54ee9d0f438864f2a99bbb8c0cf53aa8b7e0e217bd74b2fd324ff0b882a32' '298c2abc4c0e11ab03470209b4ff93c184eed40d3cf9e1913e41ba0ea0179837' 'e200d1cf003d60eca4a825aec9475f36dd8db6a5a8805eaac93e3fecfa0b3cb0' '29980d1d73742ea2e418c4e10e20e64a1554936946cd9e81a1f07d05c34ab8f6' '5aeb12c046553b53e5edd75a7c94a082e8c4edc4ee1226f5163d5ce9774f4d3c' '3b994ae27fd1a14ccd569cfc103b205807fe262fe2487446de02d870455e1ec8')
 package() {
   install -Dm644 aurora-firmware-order.conf "$pkgdir/usr/lib/modprobe.d/aurora-firmware-order.conf"
   install -Dm755 aurora-peripheral-firmware.sh "$pkgdir/usr/lib/omarchy/initcpio/aurora-peripheral-firmware.sh"
@@ -19,4 +21,7 @@ package() {
   install -Dm644 95-aurora-vendor-order.conf "$pkgdir/etc/mkinitcpio.conf.d/95-aurora-vendor-order.conf"
   install -Dm644 aurora-vendor-order-cryptsetup.conf "$pkgdir/usr/lib/omarchy/initcpio/aurora-vendor-order-cryptsetup.conf"
   install -Dm644 20-aurora-vendor-order.conf "$pkgdir/usr/lib/systemd/system/omarchy-vendor-firmware.service.d/20-aurora-vendor-order.conf"
+  install -Dm755 aurora-regdom-fallback "$pkgdir/usr/lib/omarchy/aurora-regdom-fallback"
+  install -Dm644 aurora-regdom-fallback.service "$pkgdir/usr/lib/systemd/system/aurora-regdom-fallback.service"
+  install -Dm644 86-aurora-regdom-fallback.rules "$pkgdir/usr/lib/udev/rules.d/86-aurora-regdom-fallback.rules"
 }
