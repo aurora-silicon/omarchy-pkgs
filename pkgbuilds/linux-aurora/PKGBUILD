@@ -13,11 +13,15 @@ _aurorarel=5
 pkgrel=1
 
 # Immutable pin on aurora-silicon/linux (branch aurora-wip). Every bump is a
-# PR that moves _commit and the archive checksum; the pinned commit is cold-boot
-# qualification is recorded in docs/aurora-edge.md before channel publication.
-_commit=790d5a81066bd922bea78dce43ea7e5fc60d4ca4
+# PR that moves _commit; its cold-boot qualification is recorded in
+# docs/aurora-edge.md before channel publication. 5f6c917 merges #301, which
+# leaves the firmware-owned J700 DISP_CPU domain alone: without it the Neo
+# does not boot.
+_commit=5f6c917f2c824b3c87497e8bd7dd92a6de0efe60
 
-_m1n1_version=1.6.1.aurora19
+# Any m1n1 1.6.1 loads these device trees. The Neo's own Stage 2 comes from the
+# image, so the floor stays where M1 and M2 users' m1n1-aurora already meets it.
+_m1n1_version=1.6.1
 
 pkgbase=linux-aurora
 _srcname=linux
@@ -25,11 +29,13 @@ _kernelname=${pkgbase#linux}
 _desc="AArch64 Apple Silicon (Aurora kernel)"
 pkgver="${_auroraver}.aurora${_aurorarel}"
 arch=('aarch64')
+groups=('omarchy-platform-apple-silicon')
 url="https://github.com/aurora-silicon/linux"
 license=('GPL2')
 
 makedepends=(
-  base-devel bc dtc kmod libelf pahole cpio perl rustup clang llvm lld tar xz xmlto python git patch
+  base-devel bc dtc kmod libelf pahole cpio perl rustup clang llvm lld clang18 llvm18 lld18
+  tar xz xmlto python git patch
 )
 options=('!strip')
 source=("linux::git+https://github.com/aurora-silicon/linux.git#commit=${_commit}"
@@ -60,7 +66,8 @@ prepare() {
   echo "Pinning the Rust toolchain..."
   cp ../rust-toolchain.toml .
 
-  export LLVM="${AURORA_LLVM:--18}"
+  # ALARM's clang18, llvm18 and lld18 install their tools under this prefix only.
+  export LLVM="${AURORA_LLVM:-/usr/lib/llvm18/bin/}"
   local clang_command="clang${LLVM}"
   [[ $LLVM != */ ]] || clang_command="${LLVM}clang"
   "$clang_command" --version | head -1 | grep -Eq 'clang version 18\.' || {
@@ -88,7 +95,7 @@ prepare() {
 build() {
   cd $_srcname
   echo "Building base..."
-  export LLVM="${AURORA_LLVM:--18}" RUSTUP_TOOLCHAIN=1.85.0
+  export LLVM="${AURORA_LLVM:-/usr/lib/llvm18/bin/}" RUSTUP_TOOLCHAIN=1.85.0
   export AURORA_BINDGEN_REAL="$srcdir/private-bindgen/rust-bindgen-0.73.2/target/release/bindgen"
   export BINDGEN="$srcdir/bindgen-kernel.py"
   make O="$PWD/build/base" -j"${OMARCHY_BUILD_JOBS:-10}" Image modules dtbs
@@ -103,7 +110,6 @@ _package_kernel() {
   # with linux-aarch64 for any dependency on linux.
   provides=(WIREGUARD-MODULE linux-asahi=${pkgver})
   conflicts=(linux-asahi)
-  replaces=(linux-asahi)
 
   local kernver="$(<$O/version)"
   local modulesdir="$pkgdir/usr/lib/modules/$kernver"
@@ -137,7 +143,6 @@ _package-headers() {
   depends=(pahole)
   provides=(linux-asahi-headers=${pkgver})
   conflicts=(linux-asahi-headers)
-  replaces=(linux-asahi-headers)
 
   KARCH=arm64
 
