@@ -46,16 +46,31 @@ class EdgeMetadataTests(unittest.TestCase):
                 self.assertEqual(value['source'], 'local')
                 self.assertNotIn('release_ring', value)
 
-    def test_replacements_provide_legacy_names(self):
+    def test_stock_names_are_provided_but_never_replaced(self):
+        # A replaces= on a stock name swaps it on every machine using [omarchy],
+        # including Qualcomm and generic aarch64 ones, at their next update.
         for new, old in [('mesa-aurora', 'mesa'), ('vulkan-aurora', 'vulkan-asahi'),
                          ('aurora-bless', 'asahi-bless'), ('uboot-aurora', 'uboot-asahi'),
                          ('aurora-audio', 'asahi-audio'),
-                         ('alsa-ucm-conf-aurora', 'alsa-ucm-conf-asahi')]:
+                         ('alsa-ucm-conf-aurora', 'alsa-ucm-conf-asahi'), ('aura', 'm1n1'),
+                         ('aura', 'm1n1-aurora')]:
             base = 'mesa-aurora' if new.startswith('vulkan-') else new
             package = srcinfo(base)[new]
             self.assertIn(old, package['conflicts'])
-            self.assertIn(old, package['replaces'])
-            self.assertTrue(any(p.startswith(old + '=') for p in package['provides']))
+            self.assertNotIn(old, package.get('replaces', []))
+            if old != 'm1n1-aurora':
+                self.assertTrue(any(p.startswith(old + '=') for p in package['provides']))
+
+    def test_kernel_replaces_nothing(self):
+        # linux-aurora sets its relations inside generated package functions,
+        # which --printsrcinfo does not see.
+        recipe = (ROOT / 'pkgbuilds' / 'linux-aurora' / 'PKGBUILD').read_text()
+        self.assertNotIn('replaces=', recipe)
+
+    def test_every_recipe_is_apple_silicon_only(self):
+        for name in NAMES:
+            for package in srcinfo(name).values():
+                self.assertEqual(package['groups'], ['omarchy-platform-apple-silicon'])
 
     def test_mesa_epoch_and_existing_neo_versions_upgrade(self):
         installed = {'mesa-aurora': '1:26.3.0_devel-932.a0bcbcb28528',
@@ -74,7 +89,7 @@ class EdgeMetadataTests(unittest.TestCase):
         self.assertGreaterEqual(int(subprocess.check_output(['vercmp', compatibility, '1.6.1.aurora19'], text=True)), 0)
         for old in ['m1n1', 'm1n1-aurora', 'm1n1-neo']:
             self.assertIn(old, package['conflicts'])
-            self.assertIn(old, package['replaces'])
+        self.assertEqual(package['replaces'], ['m1n1-neo'])
 
 
 if __name__ == '__main__':

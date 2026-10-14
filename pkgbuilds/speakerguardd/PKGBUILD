@@ -3,6 +3,7 @@ pkgver=0.1.0.aurora2
 pkgrel=1
 pkgdesc='Apple speaker feed-forward protection with J700 profile'
 arch=('aarch64')
+groups=('omarchy-platform-apple-silicon')
 url='https://github.com/aurora-silicon/speakerguardd'
 license=('MIT')
 _commit=e03febfe52a540e9255036a01e18030e0a5135f9

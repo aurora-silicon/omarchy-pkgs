@@ -4,13 +4,14 @@ pkgver=0.1.0.r20261014
 pkgrel=1
 pkgdesc='Aurora Silicon bootloader for Apple Silicon'
 arch=('aarch64')
+groups=('omarchy-platform-apple-silicon')
 url='https://github.com/aurora-silicon/aura'
 license=('MIT' 'GPL-2.0-only')
 _commit=c4331a90ef324eab33d34d1515d7e42748a293ab
 _compat=1.6.1.aurora19
 provides=("m1n1=$_compat" "m1n1-aurora=$_compat" "m1n1-neo=$_compat")
 conflicts=('m1n1' 'm1n1-aurora' 'm1n1-neo')
-replaces=('m1n1' 'm1n1-aurora' 'm1n1-neo')
+replaces=('m1n1-neo')
 depends=('asahi-scripts>=20260127.1' 'uboot-aurora')
 makedepends=('git' 'clang' 'lld' 'llvm' 'rustup' 'make' 'python')
 options=('!strip' '!debug')
