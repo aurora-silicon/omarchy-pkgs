@@ -1,0 +1,54 @@
+pkgbase=mesa-aurora
+pkgname=('mesa-aurora' 'vulkan-aurora')
+epoch=1
+pkgver=26.3.0_devel.r932.a0bcbcb28528
+pkgrel=1
+pkgdesc='Aurora Asahi Gallium, Zink and Honeykrisp'
+arch=('aarch64')
+url='https://github.com/aurora-silicon/mesa'
+license=('MIT')
+_commit=a0bcbcb2852845ecac9731999fc165a7f7cd9b8f
+makedepends=('git' 'meson' 'ninja' 'python-mako' 'python-yaml' 'python-packaging' 'rust'
+             'bindgen' 'clang' 'llvm' 'cbindgen' 'glslang' 'libdrm' 'expat' 'libglvnd'
+             'libx11' 'libxcb' 'libxext' 'libxfixes' 'libxrandr' 'libxshmfence' 'libxxf86vm'
+             'wayland' 'wayland-protocols' 'spirv-tools' 'vulkan-headers' 'libdisplay-info'
+             'lm_sensors' 'zlib' 'zstd' 'xcb-util-keysyms')
+source=("mesa::git+$url.git#commit=$_commit")
+sha256sums=('SKIP')
+options=('!debug')
+build() {
+  arch-meson mesa build -Dbuildtype=release -Dplatforms=x11,wayland \
+    -Dgallium-drivers=asahi,zink,softpipe,llvmpipe -Dvulkan-drivers=asahi \
+    -Degl=enabled -Dgbm=enabled -Dglx=dri -Dgles1=enabled -Dgles2=enabled \
+    -Dglvnd=enabled -Dllvm=enabled -Dvideo-codecs=all -Dvulkan-layers= -Dbuild-tests=true
+  meson compile -C build -j "${OMARCHY_BUILD_JOBS:-10}"
+  DESTDIR="$srcdir/mesa-stage" meson install -C build --no-rebuild
+}
+check() {
+  meson test -C build --print-errorlogs --no-rebuild
+}
+package_mesa-aurora() {
+  pkgdesc='Aurora native Asahi Gallium and Zink OpenGL drivers'
+  depends=('expat' 'glibc' 'gcc-libs' 'libdrm' 'libglvnd' 'libx11' 'libxcb' 'libxext'
+           'libxshmfence' 'libxxf86vm' 'lm_sensors' 'spirv-tools' 'wayland' 'zlib' 'zstd' 'llvm-libs')
+  provides=("mesa=$epoch:$pkgver" 'mesa-libgl' 'opengl-driver' 'libgbm.so')
+  conflicts=('mesa')
+  replaces=('mesa')
+  cp -a "$srcdir/mesa-stage/usr" "$pkgdir/"
+  rm "$pkgdir/usr/lib/libvulkan_asahi.so"
+  rm "$pkgdir"/usr/share/vulkan/icd.d/*asahi*.json
+  rmdir "$pkgdir/usr/share/vulkan/icd.d" "$pkgdir/usr/share/vulkan" 2>/dev/null || true
+
+}
+package_vulkan-aurora() {
+  pkgdesc='Aurora Honeykrisp Vulkan driver'
+  depends=('expat' 'glibc' 'gcc-libs' 'libdrm' 'libdisplay-info' 'libx11' 'libxcb'
+           'libxshmfence' 'spirv-tools' 'systemd-libs' 'vulkan-icd-loader' 'wayland'
+           'xcb-util-keysyms' 'zlib' 'zstd')
+  provides=("vulkan-asahi=$epoch:$pkgver" "vulkan-asahi-aurora=$epoch:$pkgver" 'vulkan-driver')
+  conflicts=('vulkan-asahi' 'vulkan-asahi-aurora')
+  replaces=('vulkan-asahi' 'vulkan-asahi-aurora')
+  install -Dm755 "$srcdir/mesa-stage/usr/lib/libvulkan_asahi.so" "$pkgdir/usr/lib/libvulkan_asahi.so"
+  install -d "$pkgdir/usr/share/vulkan/icd.d"
+  cp -a "$srcdir"/mesa-stage/usr/share/vulkan/icd.d/*asahi*.json "$pkgdir/usr/share/vulkan/icd.d/"
+}
