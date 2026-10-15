@@ -1,0 +1,6 @@
+#!/usr/bin/ash
+# SPDX-License-Identifier: MIT
+# busybox initramfs counterpart of aurora-display-early.service.
+run_earlyhook() {
+  /usr/lib/omarchy/initcpio/aurora-display-early.sh
+}

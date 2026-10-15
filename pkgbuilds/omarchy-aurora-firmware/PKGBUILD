@@ -1,7 +1,7 @@
 pkgname=omarchy-aurora-firmware
 pkgver=20261014
-pkgrel=1
-pkgdesc='Order Apple peripheral admission after device firmware extraction'
+pkgrel=2
+pkgdesc='Order Apple peripheral admission after device firmware extraction, early Neo display'
 arch=('aarch64')
 groups=('omarchy-platform-apple-silicon')
 license=('MIT')
@@ -11,8 +11,15 @@ source=(aurora-firmware-order.conf aurora-peripheral-firmware.sh
         aurora-peripheral-firmware.service aurora-vendor-order.install
         95-aurora-vendor-order.conf aurora-vendor-order-cryptsetup.conf
         20-aurora-vendor-order.conf aurora-regdom-fallback
-        aurora-regdom-fallback.service 86-aurora-regdom-fallback.rules)
-sha256sums=('e6338787cc03c7704589df20f7551ac17bc2ae25aa2f8df3b6d9532a1c5b79f9' '70f1fcc7890963fe9d7efda0da6f917557a7278371586c4fc2962c1b1c7cc197' '328c689685f21bb760f3bea7984b42060a04f6a386d4a35b8237de95328ccc31' 'a47b4dac3336faef8744406f86058cc6e08bbd2c85b9851f8b3a4e37e23b80ba' '8ef54ee9d0f438864f2a99bbb8c0cf53aa8b7e0e217bd74b2fd324ff0b882a32' '298c2abc4c0e11ab03470209b4ff93c184eed40d3cf9e1913e41ba0ea0179837' 'e200d1cf003d60eca4a825aec9475f36dd8db6a5a8805eaac93e3fecfa0b3cb0' '234898242c7b91bc80e5229252e9b80531d2500210e4ba722218a99147ea9388' '5aeb12c046553b53e5edd75a7c94a082e8c4edc4ee1226f5163d5ce9774f4d3c' '3b994ae27fd1a14ccd569cfc103b205807fe262fe2487446de02d870455e1ec8')
+        aurora-regdom-fallback.service 86-aurora-regdom-fallback.rules
+        aurora-display.install aurora-display.hook aurora-display-early.sh
+        aurora-display-early.service 96-aurora-display.conf)
+sha256sums=('e6338787cc03c7704589df20f7551ac17bc2ae25aa2f8df3b6d9532a1c5b79f9' '70f1fcc7890963fe9d7efda0da6f917557a7278371586c4fc2962c1b1c7cc197' '328c689685f21bb760f3bea7984b42060a04f6a386d4a35b8237de95328ccc31' 'a47b4dac3336faef8744406f86058cc6e08bbd2c85b9851f8b3a4e37e23b80ba' '8ef54ee9d0f438864f2a99bbb8c0cf53aa8b7e0e217bd74b2fd324ff0b882a32' '298c2abc4c0e11ab03470209b4ff93c184eed40d3cf9e1913e41ba0ea0179837' 'e200d1cf003d60eca4a825aec9475f36dd8db6a5a8805eaac93e3fecfa0b3cb0' '234898242c7b91bc80e5229252e9b80531d2500210e4ba722218a99147ea9388' '5aeb12c046553b53e5edd75a7c94a082e8c4edc4ee1226f5163d5ce9774f4d3c' '3b994ae27fd1a14ccd569cfc103b205807fe262fe2487446de02d870455e1ec8'
+            '64d1bc5177d3612441628974f71d909c639141e456bff18ffc91a196d5de0374'
+            '2394bf2dc0337d022963302cb44fb274e07d2607eff71296fc4b7da87d317aee'
+            '5eabae62169eeb535fe30050325f49b909330c6718ddd546d05ac0e028b0c43a'
+            'a8f47d631a8e393bcef837ddb9c609416a9f90ee764f609a8e32e956445faadc'
+            '6a7c40b7b1e3a085b43ebc2b942cd30ad54a397980d962f5963fd64f1f2b4fb8')
 package() {
   install -Dm644 aurora-firmware-order.conf "$pkgdir/usr/lib/modprobe.d/aurora-firmware-order.conf"
   install -Dm755 aurora-peripheral-firmware.sh "$pkgdir/usr/lib/omarchy/initcpio/aurora-peripheral-firmware.sh"
@@ -24,4 +31,9 @@ package() {
   install -Dm755 aurora-regdom-fallback "$pkgdir/usr/lib/omarchy/aurora-regdom-fallback"
   install -Dm644 aurora-regdom-fallback.service "$pkgdir/usr/lib/systemd/system/aurora-regdom-fallback.service"
   install -Dm644 86-aurora-regdom-fallback.rules "$pkgdir/usr/lib/udev/rules.d/86-aurora-regdom-fallback.rules"
+  install -Dm755 aurora-display.install "$pkgdir/usr/lib/initcpio/install/aurora-display"
+  install -Dm755 aurora-display.hook "$pkgdir/usr/lib/initcpio/hooks/aurora-display"
+  install -Dm755 aurora-display-early.sh "$pkgdir/usr/lib/omarchy/initcpio/aurora-display-early.sh"
+  install -Dm644 aurora-display-early.service "$pkgdir/usr/lib/omarchy/initcpio/aurora-display-early.service"
+  install -Dm644 96-aurora-display.conf "$pkgdir/etc/mkinitcpio.conf.d/96-aurora-display.conf"
 }

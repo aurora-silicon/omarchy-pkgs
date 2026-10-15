@@ -1,0 +1,10 @@
+[Unit]
+Description=Load the Apple display driver early on the MacBook Neo
+DefaultDependencies=no
+Conflicts=shutdown.target
+Before=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/omarchy/initcpio/aurora-display-early.sh

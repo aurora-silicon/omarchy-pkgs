@@ -1,0 +1,25 @@
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+build() {
+  # autodetect keeps appledrm only when the machine building the image has it
+  # bound, which an image builder never does. Without it the external display
+  # stays dark until the root is unlocked. A kernel without the module still
+  # builds an image.
+  add_module 'appledrm?'
+  add_binary bash
+  add_binary grep
+  add_binary modprobe
+  add_file /usr/lib/omarchy/initcpio/aurora-display-early.sh
+  # A systemd initrd starts the unit; a busybox one runs the early hook. Each
+  # ignores the other's file.
+  add_file /usr/lib/omarchy/initcpio/aurora-display-early.service \
+    /usr/lib/systemd/system/aurora-display-early.service 644
+  add_symlink /usr/lib/systemd/system/sysinit.target.wants/aurora-display-early.service \
+    ../aurora-display-early.service
+  add_runscript
+}
+
+help() {
+  echo 'Bring up the Apple display driver early so a USB-C external display shows'
+  echo 'the passphrase prompt on a MacBook Neo with its lid closed.'
+}
