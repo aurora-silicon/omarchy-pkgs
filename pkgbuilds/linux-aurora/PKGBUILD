@@ -139,7 +139,7 @@ _package_kernel() {
   echo "Installing modules..."
   # Stripped: the unstripped modules (405 MB) give a 100 MB initramfs that
   # hung the Neo's first boot.
-  make O="$O" INSTALL_MOD_PATH="$pkgdir/usr" INSTALL_MOD_STRIP=1 modules_install
+  make O="$O" BINDGEN="$BINDGEN" INSTALL_MOD_PATH="$pkgdir/usr" INSTALL_MOD_STRIP=1 modules_install
 
   echo "Installing device trees..."
   # Flat, where update-m1n1 and the Omarchy Mac image builder read them
@@ -156,6 +156,7 @@ _package_kernel() {
 
 _package() {
   cd $_srcname
+  _use_aurora_bindgen
   export O="$PWD/build/base"
   _package_kernel
 }
@@ -169,6 +170,7 @@ _package-headers() {
   KARCH=arm64
 
   cd $_srcname
+  _use_aurora_bindgen
   O=build/base
   local builddir="$pkgdir/usr/lib/modules/$(<${O}/version)/build"
 
@@ -215,7 +217,7 @@ _package-headers() {
   fi
 
   echo "Installing unstripped VDSO..."
-  make O="$O" INSTALL_MOD_PATH="$pkgdir/usr" vdso_install link=
+  make O="$O" BINDGEN="$BINDGEN" INSTALL_MOD_PATH="$pkgdir/usr" vdso_install link=
 
   echo "Removing unneeded architectures..."
   local arch
