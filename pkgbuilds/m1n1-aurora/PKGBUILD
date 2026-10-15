@@ -1,44 +1,48 @@
-# m1n1 for linux-aurora. Aurora's device trees name the USB4 aliases
-# usb4-N-acio, usb4-N-nhi and usb4-N-pcie-adapter; m1n1 v1.6.1 only looks up
-# the usb4_N_* names, so without the alias fallback the USB4 tunables are
-# never applied. The Asahi m1n1 stays with linux-asahi.
+# m1n1 for linux-aurora: aurora-silicon/m1n1 aurora-wip, the Stage 2 the
+# MacBook Neo (J700) beta boots, built as published with no source patches;
+# only the Omarchy boot logos are added (BUILTIN_LOGO).
+# It also serves M1 and M2: the USB4 alias fallbacks the 1.6.1.aurora1 build
+# patched in are part of this tree (see src/kboot.c dt_set_acio_tunables).
 pkgname=m1n1-aurora
-pkgver=1.6.1.aurora1
-pkgrel=3
-pkgdesc='Omarchy Aurora m1n1 with compatible USB4 tunable aliases'
+pkgver=1.6.1.aurora20261015
+pkgrel=1
+pkgdesc='Aurora m1n1 (aurora-wip) for Apple Silicon Macs, including the MacBook Neo'
 arch=('aarch64')
 url='https://github.com/aurora-silicon/m1n1'
 license=('MIT' 'CC0-1.0' 'OFL-1.1-RFN' 'Zlib' 'BSD-2-Clause OR GPL-2.0-or-later' 'BSD-3-Clause OR GPL-2.0-or-later' 'MIT OR Apache-2.0')
 provides=("m1n1=$pkgver")
 conflicts=('m1n1')
-makedepends=('clang' 'lld' 'llvm' 'rustup' 'make' 'patch')
-options=('!strip' '!debug')
-_commit=06a4601a351ebfd1abb6abba9a44c34e40d94776
+# A pinned rustup toolchain with the prebuilt bare-metal target, as the
+# earlier m1n1-aurora builds: building core from rust-src (BUILDSTD=1) with a
+# newer Rust leaves a reference to wcslen that m1n1 does not provide.
+_rust=1.89.0
+makedepends=('clang' 'lld' 'llvm' 'rustup' 'make')
+options=('!strip' '!debug' '!lto')
+_commit=f3ac615eb1376d3bbba24cd84c414b9e41892adb
 source=("m1n1-${_commit}.tar.gz::https://github.com/aurora-silicon/m1n1/archive/${_commit}.tar.gz"
-        aurora-cio-aliases.patch
         bootlogo_48.bin
         bootlogo_128.bin
-        bootlogo_256.bin
-)
-sha256sums=('9d6972d3edaff856e985f2b1feb64fcf9b42fc5eecda7be64a242b49bbbe636d'
-            '4345a4e431642c4316595bdf023bc67d5c72e0374f3c8d59be81318710138f32'
+        bootlogo_256.bin)
+sha256sums=('14daf5f9323c0bd39cc701b77a996d5581537e0145bf4e03afce48eb71c6823b'
             '6668050653645711ad7523fe2abeb4cbe85a92c875f3eec754b6db23cea2191c'
             'b19cb017645c7a9068ea0be9b6bb394131d7ca11b28093cf6caa1ffca74b0a4e'
             '9c659b392aacfa31c62c638003d2257abfdbe17919b5c90cde4c4e62f87addab')
 
 prepare() {
   cd "m1n1-$_commit"
-  patch -p1 < "$srcdir/aurora-cio-aliases.patch"
-  for size in 48 128 256; do
-    cp "$srcdir/bootlogo_$size.bin" "data/bootlogo_$size.bin"
-  done
-  rustup toolchain install 1.89.0 --profile minimal --target aarch64-unknown-none-softfloat
+  cp "$srcdir/bootlogo_48.bin" data/bootlogo_48.bin
+  cp "$srcdir/bootlogo_128.bin" data/omarchy_128.bin
+  cp "$srcdir/bootlogo_256.bin" data/omarchy_256.bin
+  rustup toolchain install "$_rust" --profile minimal --target aarch64-unknown-none-softfloat
+  # Fetch the crates the lock file names, so build() can run offline.
+  RUSTUP_TOOLCHAIN=$_rust cargo fetch --locked --manifest-path rust/Cargo.toml
 }
 
 build() {
   cd "m1n1-$_commit"
-  RUSTUP_TOOLCHAIN=1.89.0 make RELEASE=1 USE_CLANG=1 ARCH=aarch64-linux-gnu \
-    M1N1_VERSION_TAG=v1.6.1-omarchy.aurora1
+  unset CFLAGS CXXFLAGS LDFLAGS RUSTFLAGS
+  RUSTUP_TOOLCHAIN=$_rust make RELEASE=1 USE_CLANG=1 ARCH=aarch64-linux-gnu BUILTIN_LOGO=omarchy \
+    M1N1_VERSION_TAG="v1.6.1-aurora-g${_commit::7}"
 }
 
 package() {

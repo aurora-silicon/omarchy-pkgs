@@ -2,91 +2,123 @@
 # Based on the asahi-alarm linux-asahi package by Jos Dehaes and Matthias Kurz.
 #
 # Aurora Silicon maintain a fork of the Asahi kernel carrying DisplayPort
-# alt-mode and USB4 support for external monitors, variable refresh rate, and
-# the ISP and AOP drivers. Those changes touch device trees, the type-C stack
-# and DRM, so they cannot ship as a module: this is a whole alternative kernel
-# for Macs on the Omarchy edge channel. It reaches rc and stable only after
-# cold-boot qualification on M1 and M2.
+# alt-mode and USB4 support for external monitors, variable refresh rate, the
+# ISP and AOP drivers, and the MacBook Neo (J700, T8140). Those changes touch
+# device trees, the type-C stack and DRM, so they cannot ship as a module:
+# this is a whole alternative kernel for Macs on the Omarchy edge channel.
+#
+# This build is the Neo beta kernel: public aurora-silicon/linux aurora-wip at
+# the pin below, configured from aurora_j700_defconfig (`make savedefconfig`
+# of the configuration the Neo booted on 2026-10-15). Everything comes from
+# public sources and builds offline once the sources are fetched.
 
 _auroraver=7.1.12
-_aurorarel=2
-pkgrel=11
+pkgrel=1
 
-# Immutable pin on aurora-silicon/linux (branch aurora-wip). Every bump is a
-# PR that moves _commit and the archive checksum; the pinned commit is cold-boot
-# qualified on MacBook Pro 14" M1 Pro (j314s) and 16" M2 Max (j416c) first.
-_commit=2439016d2e8d3a0d8aebcd243f29604a91f201c9
+# Immutable pin on aurora-silicon/linux (branch aurora-wip). 5f6c917 merges
+# #301, which leaves the firmware-owned J700 DISP_CPU domain alone: without it
+# the Neo does not boot.
+_commit=5f6c917f2c824b3c87497e8bd7dd92a6de0efe60
 
 _m1n1_version=1.6.1
 
 pkgbase=linux-aurora
 _srcname=linux-${_commit}
-_kernelname=${pkgbase#linux}
 _desc="AArch64 Apple Silicon (Aurora kernel)"
-pkgver="${_auroraver}.aurora${_aurorarel}"
+# The date sorts above the edge channel's 7.1.12.aurora<N> builds.
+pkgver="${_auroraver}.aurora20261015"
 arch=('aarch64')
 url="https://github.com/aurora-silicon/linux"
-license=('GPL2')
+license=('GPL-2.0-only')
 
+# LLVM 22, as the Neo kernel was built and tools/aurora-bindgen was qualified:
+# with LLVM 23 the kernel switches CC_MS_EXTENSIONS to -fms-anonymous-structs
+# and bindgen again gets the anonymous namespace members wrong.
+_llvm=22
 makedepends=(
-  base-devel bc dtc kmod libelf pahole cpio perl rustup rust-bindgen tar xz xmlto python
+  base-devel bc cpio dtc kmod libelf pahole patch perl python tar xz
+  "clang${_llvm}" "lld${_llvm}" "llvm${_llvm}" llvm rust rust-src
 )
-options=('!strip')
+options=('!strip' '!debug')
+_bindgen=0.73.2
 source=(
-  https://github.com/aurora-silicon/linux/archive/${_commit}.tar.gz
-  config         # the main kernel config file
-  rust-toolchain.toml
+  "linux-${_commit}.tar.gz::https://github.com/aurora-silicon/linux/archive/${_commit}.tar.gz"
+  "rust-bindgen-${_bindgen}.tar.gz::https://codeload.github.com/rust-lang/rust-bindgen/tar.gz/refs/tags/v${_bindgen}"
+  aurora_j700_defconfig
 )
-sha256sums=('6347354537148120fc5448afcb8671a558ce336f731c70690cd88062a903f84d'
-            'e8f3818e6bfa70166dd5caff228a0becfdd5d4f0165b589efa38150fd0b59cc9'
-            '2a95563bb9f5b216cc3c170a17e9471448bc63a7084bdd67df23d074939b366c')
+# tools/aurora-bindgen/build.py checks and unpacks the bindgen archive itself.
+noextract=("rust-bindgen-${_bindgen}.tar.gz")
+sha256sums=('13d3537fcc7ba6698a4933a5548cb636d4b0c17cc314b5989cc833c9b2e441cf'
+            '5fc3277dd334e4bbbd7bdb8cad5d4fb87a667b2e95a2bae350a8d5424c280629'
+            'e1f2b2608c5c19eb362278ef75031e29683f736f2e6fe4418d8e3375318df07d')
 
 # Kbuild takes ARCH literally and knows arm64, not aarch64.
 export ARCH=arm64
+# Clang, LLD and the LLVM binutils, as the Neo kernel was built; this also
+# makes INSTALL_MOD_STRIP use llvm-strip. Arch Linux ARM installs the
+# versioned LLVM under its own prefix only, and bindgen loads its libclang.
+export LLVM=1
+export PATH="/usr/lib/llvm${_llvm}/bin:$PATH"
+export LIBCLANG_PATH="/usr/lib/llvm${_llvm}/lib"
 export KBUILD_BUILD_HOST=archlinux
 export KBUILD_BUILD_USER=$pkgbase
 export KBUILD_BUILD_TIMESTAMP="$(date -Ru${SOURCE_DATE_EPOCH:+d @$SOURCE_DATE_EPOCH})"
 
+# The kernel's Rust bindings need the in-tree patched bindgen
+# (tools/aurora-bindgen): stock bindgen 0.73.2 gets the layout of anonymous
+# members wrong and the build stops on the layout assertions.
+# The top Makefile assigns BINDGEN, so it is passed on each make command line.
+_use_aurora_bindgen() {
+  export BINDGEN="$srcdir/aurora-bindgen/rust-bindgen-${_bindgen}/target/release/bindgen"
+}
+
 prepare() {
   cd $_srcname
 
-  echo "Setting version..."
-  echo "-$_aurorarel-$pkgrel" > localversion.10-pkgrel
+  _use_aurora_bindgen
+  if [[ ! -x $BINDGEN ]]; then
+    echo "Building the kernel's bindgen..."
+    # Fetches the crates bindgen's Cargo.lock pins; everything after this
+    # function runs offline.
+    rm -rf "$srcdir/aurora-bindgen"
+    python3 tools/aurora-bindgen/build.py --archive "$srcdir/rust-bindgen-${_bindgen}.tar.gz" \
+      --output-dir "$srcdir/aurora-bindgen"
+  fi
 
-  local src
-  for src in "${source[@]}"; do
-    src="${src%%::*}"
-    src="${src##*/}"
-    [[ $src = *.patch ]] || continue
-    echo "Applying patch $src..."
-    patch -Np1 < "../$src"
-  done
-
-  echo "Pinning the Rust toolchain..."
-  cp ../rust-toolchain.toml .
-
-  echo "Creating build directories..."
+  echo "Setting config..."
   mkdir -p build/base
-
-  echo "Setting config (base)..."
-  cp ../config build/base/.config
-  make olddefconfig prepare O=$PWD/build/base
-  diff -u ../config build/base/.config || :
-  make -s kernelrelease O=$PWD/build/base > build/base/version
+  install -m644 ../aurora_j700_defconfig arch/arm64/configs/aurora_j700_defconfig
+  make O="$PWD/build/base" BINDGEN="$BINDGEN" aurora_j700_defconfig
+  # The release names the commit: 7.1.12-aurora-g5f6c917-ARCH. It ends in
+  # -ARCH because asahi-scripts' update-m1n1 takes its device trees from the
+  # newest /lib/modules/*-ARCH/dtbs unless /etc/default/update-m1n1 says
+  # otherwise, and omarchy-mac-boot keeps that default.
+  # A warning from a newer compiler than the one the configuration was
+  # qualified with must not fail a distribution build (the in-tree
+  # asahi.config fragment turns WERROR off for the same reason).
+  scripts/config --file build/base/.config \
+    --set-str LOCALVERSION "-aurora-g${_commit::7}-ARCH" \
+    --disable LOCALVERSION_AUTO \
+    --disable WERROR
+  make O="$PWD/build/base" BINDGEN="$BINDGEN" olddefconfig prepare
+  make -s O="$PWD/build/base" BINDGEN="$BINDGEN" kernelrelease > build/base/version
+  grep -qx "CONFIG_CLANG_VERSION=${_llvm}[0-9]\{4\}" build/base/.config || {
+    echo "linux-aurora needs clang ${_llvm}" >&2; return 1; }
 
   echo "Prepared $pkgbase version $(<build/base/version)"
 }
 
 build() {
   cd $_srcname
+  _use_aurora_bindgen
   echo "Building base..."
-  make all O=$PWD/build/base -j $(nproc)
+  make O="$PWD/build/base" BINDGEN="$BINDGEN" -j"$(nproc)" Image modules dtbs
 }
 
 _package_kernel() {
-  pkgdesc="The $pkgdesc kernel and modules"
-  depends=(coreutils kmod initramfs $2 "m1n1>=$_m1n1_version")
-  optdepends=('crda: to set the correct wireless channels of your country'
+  pkgdesc="The $_desc kernel and modules"
+  depends=(coreutils kmod initramfs "m1n1>=$_m1n1_version")
+  optdepends=('wireless-regdb: to set the correct wireless channels of your country'
               'linux-firmware: firmware images needed for some devices')
   # No generic linux provide: on a shared aarch64 repository it would compete
   # with linux-aarch64 for any dependency on linux.
@@ -102,13 +134,21 @@ _package_kernel() {
   install -Dm644 "$O"/arch/arm64/boot/Image "$modulesdir/vmlinuz"
 
   # Used by mkinitcpio to name the kernel
-  echo "$1" | install -Dm644 /dev/stdin "$modulesdir/pkgbase"
+  echo "$pkgbase" | install -Dm644 /dev/stdin "$modulesdir/pkgbase"
 
   echo "Installing modules..."
+  # Stripped: the unstripped modules (405 MB) give a 100 MB initramfs that
+  # hung the Neo's first boot.
   make O="$O" INSTALL_MOD_PATH="$pkgdir/usr" INSTALL_MOD_STRIP=1 modules_install
 
   echo "Installing device trees..."
-  install -Dt "$modulesdir/dtbs" "$O"/arch/arm64/boot/dts/apple/*.dtb
+  # Flat, where update-m1n1 and the Omarchy Mac image builder read them
+  # (t8140-j700.dtb among them).
+  install -Dt "$modulesdir/dtbs" -m644 "$O"/arch/arm64/boot/dts/apple/*.dtb
+  [[ -f $modulesdir/dtbs/t8140-j700.dtb ]] || { echo "no J700 device tree" >&2; return 1; }
+
+  echo "Installing the build configuration..."
+  install -Dm644 "$O"/.config "$pkgdir/usr/share/doc/$pkgbase/build.config"
 
   # remove build and source links
   rm -f "$modulesdir"/{source,build}
@@ -117,11 +157,11 @@ _package_kernel() {
 _package() {
   cd $_srcname
   export O="$PWD/build/base"
-  _package_kernel "$pkgbase"
+  _package_kernel
 }
 
 _package-headers() {
-  pkgdesc="Headers and scripts for building modules for the $pkgdesc kernel"
+  pkgdesc="Headers and scripts for building modules for the $_desc kernel"
   depends=(pahole)
   provides=(linux-asahi-headers=${pkgver})
   conflicts=(linux-asahi-headers)
@@ -134,15 +174,14 @@ _package-headers() {
 
   echo "Installing build files..."
   install -Dt "$builddir" -m644 $O/.config Makefile $O/Module.symvers $O/System.map \
-    localversion.* $O/version $O/vmlinux
+    $O/version $O/vmlinux
   install -Dt "$builddir/kernel" -m644 kernel/Makefile
   cp -t "$builddir" -a scripts $O/scripts
 
-  # required when STACK_VALIDATION is enabled
-  #install -Dt "$builddir/tools/objtool" tools/objtool/objtool
-
   # required when DEBUG_INFO_BTF_MODULES is enabled
-  install -Dt "$builddir/tools/bpf/resolve_btfids" $O/tools/bpf/resolve_btfids/resolve_btfids
+  if [[ -e $O/tools/bpf/resolve_btfids/resolve_btfids ]]; then
+    install -Dt "$builddir/tools/bpf/resolve_btfids" $O/tools/bpf/resolve_btfids/resolve_btfids
+  fi
 
   echo "Installing headers..."
   cp -t "$builddir" -a include $O/include
@@ -166,7 +205,14 @@ _package-headers() {
   install -Dt "$builddir/drivers/iio/common/hid-sensors" -m644 drivers/iio/common/hid-sensors/*.h
 
   echo "Installing KConfig files..."
-  find . -name 'Kconfig*' -exec install -Dm644 {} "$builddir/{}" \;
+  find . -path ./build -prune -o -name 'Kconfig*' -exec install -Dm644 {} "$builddir/{}" \;
+
+  # Rust: out-of-tree Rust modules need the kernel crate metadata.
+  if [[ -d $O/rust ]]; then
+    echo "Installing Rust metadata..."
+    install -Dt "$builddir/rust" -m644 $O/rust/*.rmeta
+    install -Dt "$builddir/rust" $O/rust/*.so
+  fi
 
   echo "Installing unstripped VDSO..."
   make O="$O" INSTALL_MOD_PATH="$pkgdir/usr" vdso_install link=
@@ -180,7 +226,7 @@ _package-headers() {
   done
 
   echo "Removing documentation..."
-  rm -r "$builddir/Documentation"
+  rm -rf "$builddir/Documentation"
 
   echo "Removing broken symlinks..."
   find -L "$builddir" -type l -printf 'Removing %P\n' -delete
@@ -196,23 +242,22 @@ _package-headers() {
   while read -rd '' file; do
     case "$(file --no-sandbox -bi "$file")" in
       application/x-sharedlib\;*)      # Libraries (.so)
-        strip -v $STRIP_SHARED "$file" ;;
+        llvm-strip $STRIP_SHARED "$file" ;;
       application/x-archive\;*)        # Libraries (.a)
-        strip -v $STRIP_STATIC "$file" ;;
+        llvm-strip $STRIP_STATIC "$file" ;;
       application/x-executable\;*)     # Binaries
-        strip -v $STRIP_BINARIES "$file" ;;
+        llvm-strip $STRIP_BINARIES "$file" ;;
       application/x-pie-executable\;*) # Relocatable binaries
-        strip -v $STRIP_SHARED "$file" ;;
+        llvm-strip $STRIP_SHARED "$file" ;;
     esac
-  done < <(find "$builddir" -type f -perm -u+x ! -name vmlinux -print0)
+  done < <(find "$builddir" -type f -perm -u+x ! -name vmlinux ! -path '*/rust/*' -print0)
 
   echo "Stripping vmlinux..."
-  strip -v $STRIP_STATIC "$builddir/vmlinux"
+  llvm-strip $STRIP_STATIC "$builddir/vmlinux"
 
   echo "Adding symlink..."
   mkdir -p "$pkgdir/usr/src"
   ln -sr "$builddir" "$pkgdir/usr/src/$pkgbase"
-
 }
 
 pkgname=("$pkgbase" "$pkgbase-headers")
