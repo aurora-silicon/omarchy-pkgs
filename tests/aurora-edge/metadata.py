@@ -72,6 +72,11 @@ class EdgeMetadataTests(unittest.TestCase):
             for package in srcinfo(name).values():
                 self.assertEqual(package['groups'], ['omarchy-platform-apple-silicon'])
 
+    def test_mesa_follows_neither_llvm_nor_spirv_tools(self):
+        for package in srcinfo('mesa-aurora').values():
+            for dependency in ['llvm-libs', 'spirv-tools']:
+                self.assertNotIn(dependency, package['depends'])
+
     def test_mesa_epoch_and_existing_neo_versions_upgrade(self):
         installed = {'mesa-aurora': '1:26.3.0_devel-932.a0bcbcb28528',
                      'linux-aurora': '7.1.12.aurora4-20261013.d08fd52e1619',

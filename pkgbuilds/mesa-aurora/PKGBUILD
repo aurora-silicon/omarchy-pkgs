@@ -9,29 +9,57 @@ groups=('omarchy-platform-apple-silicon')
 url='https://github.com/aurora-silicon/mesa'
 license=('MIT')
 _commit=a0bcbcb2852845ecac9731999fc165a7f7cd9b8f
+# The drivers link neither LLVM nor SPIRV-Tools. Arch Linux ARM moves both
+# (llvm-libs changes soname every major, SPIRV-Tools has no versioned soname),
+# and a Mesa linked to the old ones leaves the Neo without a GPU until this
+# package is rebuilt. Asahi needs LLVM only to precompile its CL shaders, so a
+# first build makes those compilers and the packaged one uses them.
 makedepends=('git' 'meson' 'ninja' 'python-mako' 'python-yaml' 'python-packaging' 'rust'
-             'bindgen' 'clang' 'llvm' 'cbindgen' 'glslang' 'libdrm' 'expat' 'libglvnd'
+             'rust-bindgen' 'clang' 'llvm' 'libclc' 'spirv-llvm-translator' 'spirv-tools'
+             'cbindgen' 'glslang' 'libdrm' 'expat' 'libglvnd'
              'libx11' 'libxcb' 'libxext' 'libxfixes' 'libxrandr' 'libxshmfence' 'libxxf86vm'
-             'wayland' 'wayland-protocols' 'spirv-tools' 'vulkan-headers' 'libdisplay-info'
+             'wayland' 'wayland-protocols' 'vulkan-headers' 'libdisplay-info'
              'lm_sensors' 'zlib' 'zstd' 'xcb-util-keysyms')
 source=("mesa::git+$url.git#commit=$_commit")
 sha256sums=('SKIP')
 options=('!debug')
+_options=(-Dplatforms=x11,wayland
+  -Dgallium-drivers=asahi,zink,softpipe -Dvulkan-drivers=asahi
+  -Degl=enabled -Dgbm=enabled -Dglx=dri -Dgles1=enabled -Dgles2=enabled
+  -Dglvnd=enabled -Dvideo-codecs=all -Dvulkan-layers=
+  -Dexpat=enabled -Dzstd=enabled -Dlmsensors=enabled -Dlibunwind=disabled -Dvalgrind=disabled)
+# arch-meson's flags without --auto-features enabled, which would require
+# features this driver set cannot have, such as the VA front end.
+_meson() {
+  meson setup --prefix /usr --libexecdir lib --sbindir bin --buildtype plain \
+    --wrap-mode nodownload -Db_pie=true -Db_ndebug=true -Dpython.bytecompile=1 "$@"
+}
 build() {
-  arch-meson mesa build -Dbuildtype=release -Dplatforms=x11,wayland \
-    -Dgallium-drivers=asahi,zink,softpipe,llvmpipe -Dvulkan-drivers=asahi \
-    -Degl=enabled -Dgbm=enabled -Dglx=dri -Dgles1=enabled -Dgles2=enabled \
-    -Dglvnd=enabled -Dllvm=enabled -Dvideo-codecs=all -Dvulkan-layers= -Dbuild-tests=true
+  _meson mesa tools "${_options[@]}" -Dllvm=enabled -Dbuild-tests=false
+  ninja -C tools -j "${OMARCHY_BUILD_JOBS:-10}" \
+    src/compiler/clc/mesa_clc src/compiler/spirv/vtn_bindgen2 src/asahi/clc/asahi_clc
+  printf '%s\n' '[binaries]' \
+    "mesa_clc = '$srcdir/tools/src/compiler/clc/mesa_clc'" \
+    "vtn_bindgen2 = '$srcdir/tools/src/compiler/spirv/vtn_bindgen2'" \
+    "asahi_clc = '$srcdir/tools/src/asahi/clc/asahi_clc'" > tools.ini
+
+  _meson mesa build "${_options[@]}" --native-file tools.ini \
+    -Dllvm=disabled -Dspirv-tools=disabled -Dmesa-clc=system -Dprecomp-compiler=system \
+    -Dbuild-tests=false
   meson compile -C build -j "${OMARCHY_BUILD_JOBS:-10}"
   DESTDIR="$srcdir/mesa-stage" meson install -C build --no-rebuild
 }
 check() {
-  meson test -C build --print-errorlogs --no-rebuild
+  # Mesa's own tests stay off: at this commit hk_sampler_bias_test undefines
+  # NDEBUG and calls nir_validate_shader, so it links only in debug builds.
+  # Nothing packaged may follow the system's LLVM or SPIRV-Tools.
+  ! find "$srcdir/mesa-stage" -name '*.so*' -type f -exec readelf -d {} + |
+    grep -E 'NEEDED.*(libLLVM|libSPIRV-Tools)'
 }
 package_mesa-aurora() {
   pkgdesc='Aurora native Asahi Gallium and Zink OpenGL drivers'
   depends=('expat' 'glibc' 'gcc-libs' 'libdrm' 'libglvnd' 'libx11' 'libxcb' 'libxext'
-           'libxshmfence' 'libxxf86vm' 'lm_sensors' 'spirv-tools' 'wayland' 'zlib' 'zstd' 'llvm-libs')
+           'libxshmfence' 'libxxf86vm' 'lm_sensors' 'wayland' 'zlib' 'zstd')
   provides=("mesa=$epoch:$pkgver" 'mesa-libgl' 'opengl-driver' 'libgbm.so')
   conflicts=('mesa')
   cp -a "$srcdir/mesa-stage/usr" "$pkgdir/"
@@ -43,7 +71,7 @@ package_mesa-aurora() {
 package_vulkan-aurora() {
   pkgdesc='Aurora Honeykrisp Vulkan driver'
   depends=('expat' 'glibc' 'gcc-libs' 'libdrm' 'libdisplay-info' 'libx11' 'libxcb'
-           'libxshmfence' 'spirv-tools' 'systemd-libs' 'vulkan-icd-loader' 'wayland'
+           'libxshmfence' 'systemd-libs' 'vulkan-icd-loader' 'wayland'
            'xcb-util-keysyms' 'zlib' 'zstd')
   provides=("vulkan-asahi=$epoch:$pkgver" "vulkan-asahi-aurora=$epoch:$pkgver" 'vulkan-driver')
   conflicts=('vulkan-asahi' 'vulkan-asahi-aurora')

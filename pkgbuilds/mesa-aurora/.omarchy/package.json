@@ -3,5 +3,8 @@
   "channels": [
     "edge"
   ],
-  "sync": false
+  "sync": false,
+  "rebuild_on": [
+    "libdisplay-info"
+  ]
 }
