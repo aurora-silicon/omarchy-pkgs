@@ -7,6 +7,10 @@ build() {
   add_module aop
   add_module aop_als
   add_module mt7932-fullmac
+  # cfg80211 loads with the radio here and reads its regulatory database only
+  # once; without it a country setting never reaches the global domain.
+  add_file /usr/lib/firmware/regulatory.db
+  add_file /usr/lib/firmware/regulatory.db.p7s
   # The policies come with the image, not a package; a missing one must not fail
   # the build. aurora-peripheral-firmware.sh then defers the radio instead.
   local policy
