@@ -1,12 +1,12 @@
 pkgname=aurora-audio
-pkgver=4.1.aurora2
+pkgver=4.1.aurora3
 pkgrel=1
 pkgdesc='Aurora Apple Silicon PipeWire/WirePlumber DSP profiles including J700'
 arch=('any')
 groups=('omarchy-platform-apple-silicon')
 url='https://github.com/aurora-silicon/asahi-audio'
 license=('MIT')
-_commit=b2da7512e9bfcd5837355d2393f3c43219acf6b9
+_commit=ccb95b45db2caf93f4c06eb04f03fe8a3dcefd7c
 makedepends=('git' 'make')
 depends=('alsa-ucm-conf-aurora' 'pipewire-audio' 'wireplumber' 'bankstown'
          'lsp-plugins-lv2' 'speakersafetyd' 'speakerguardd')
