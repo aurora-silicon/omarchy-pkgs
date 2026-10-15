@@ -23,7 +23,7 @@
 
 pkgname=libfprint-git
 pkgver=1.94.100.r10.g6f9479c
-pkgrel=4
+pkgrel=5
 # Retain the epoch used to supersede the previously published untested build.
 epoch=1
 pkgdesc="Library for fingerprint readers (pinned upstream snapshot with FocalTech and Synaptics 06cb:010b support, and Apple Touch ID on aarch64)"
@@ -72,7 +72,7 @@ b2sums=(
 )
 b2sums_aarch64=(
   'ec577996066baf6db6d741763abd681aae5556d52a8b67f7a52a60a4df7015c5d1edf3637835e563b2fb0edde2499173d61c50717b621f6bddf94a1f700075e5'
-  'a5ed827415f80fdcedf7a1624eac870d8ec55670dfb71208e5094ce4516a48101183788c9f6a1a672067c61cc92ddc431e851deffaebacfe82a76033e935152d'
+  'bdd60159c572c00eeb62b86b01305858d44cef867e3bd156839da9cd85bb2950623e3759ff3534f795ea6c9ae18ab02af13e864c98f24203f507c2a50d0a2300'
   '73a87f8f53136e8c49b16568aa77acf9bd2a5913c57e4793320d109ba2a11ce7b3d21b7fac8a8b1ff7ce94b738eddca120c026c8d79e320cf3ff5eede83ba30b'
 )
 
