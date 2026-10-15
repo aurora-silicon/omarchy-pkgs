@@ -72,6 +72,7 @@ jobs:
               ./tests/artifact-helpers.sh
               ./tests/build-matrix.sh
               ./tests/limine-mkinitcpio-hook.sh
+              ./tests/aurora-display-initcpio.sh
               ./tests/voxtype-bin-install.sh
               ./tests/superwhisper-bin-install.sh
               pacman -S --noconfirm --quiet rclone >/dev/null
