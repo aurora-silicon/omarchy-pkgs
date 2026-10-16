@@ -9,7 +9,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 NAMES = ['linux-aurora', 'mesa-aurora', 'aura', 'uboot-aurora', 'aurora-bless',
-         'speakerguardd', 'aurora-audio', 'alsa-ucm-conf-aurora', 'omarchy-aurora-firmware']
+         'speakerguardd', 'aurora-audio', 'aurora-display-hint', 'alsa-ucm-conf-aurora', 'omarchy-aurora-firmware']
 
 
 def srcinfo(name):

@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: GPL-2.0-only
+pkgname=aurora-display-hint
+pkgver=1
+pkgrel=1
+pkgdesc='Desktop hint for unsupported displays on the J700 front USB-C port'
+arch=('any')
+groups=('omarchy-platform-apple-silicon')
+_commit=600b095055972ae25308f5f63d29adb31468a6e9
+url="https://github.com/aurora-silicon/linux/tree/$_commit/tools/aurora-display-notifier"
+license=('GPL-2.0-only')
+depends=('python' 'python-pyudev' 'libnotify' 'systemd')
+makedepends=('make')
+optdepends=('notification-daemon: desktop notification server (e.g. mako)')
+install=aurora-display-hint.install
+_url="https://raw.githubusercontent.com/aurora-silicon/linux/$_commit/tools/aurora-display-notifier"
+source=(
+  "README.md::$_url/README.md"
+  "Makefile::$_url/Makefile"
+  "70-aurora-display-notifier.rules::$_url/70-aurora-display-notifier.rules"
+  "aurora-display-notifier.service.in::$_url/aurora-display-notifier.service.in"
+  "notifier.py::$_url/notifier.py"
+  "org.aurorasilicon.DisplayHint.desktop::$_url/org.aurorasilicon.DisplayHint.desktop"
+  "test_notifier.py::$_url/tests/test_notifier.py"
+)
+sha256sums=(
+  '62e41ac6f2ec52bd4ee4412688fd0c5a47951a8cb10ec827e0372ebc410cff08'
+  'fe6ec4a763d70a05ba51b3e4d474b5ca3b11010fc6fa6f1583a3c5b9d8552594'
+  '8726761a400801d4d5138673bb65313eb9afc84c8bf7448eed6c4be18fc6ea0f'
+  'e1266cf3a2d90695276eeef866c980bf9c9ab772858c4efb619464e21a1a6de6'
+  'eefec774f9fcfcf2a38a1baedd0fd68e1175421583b10778b4a0aa1b8a6efd19'
+  'bdd4ebaf58bf53390cd90f41b34ded54504b4d38e25c08a03c5bc61d58b7875d'
+  '1077b7c6435b14a7cb16e276158826ad564ac1d8c39fd3eac8c7e8b9d4d5cc6f'
+)
+
+prepare() {
+  mkdir -p tests
+  cp test_notifier.py tests/test_notifier.py
+}
+
+check() {
+  make test
+}
+
+package() {
+  make install DESTDIR="$pkgdir" PREFIX=/usr LIBEXECDIR=/usr/lib/aurora-display-hint
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}
