@@ -10,11 +10,11 @@
 
 _auroraver=7.1.12
 _aurorarel=5
-pkgrel=1
+pkgrel=2
 
 # Immutable pin on aurora-silicon/linux (branch aurora-wip). Every bump is a
 # PR that moves _commit; its cold-boot qualification is recorded in
-# docs/aurora-edge.md before channel publication. 5f6c917 merges #301, which
+# the PR's attached qualification evidence before channel publication. 5f6c917 merges #301, which
 # leaves the firmware-owned J700 DISP_CPU domain alone: without it the Neo
 # does not boot.
 _commit=5f6c917f2c824b3c87497e8bd7dd92a6de0efe60
@@ -39,14 +39,23 @@ makedepends=(
 )
 options=('!strip')
 source=("linux::git+https://github.com/aurora-silicon/linux.git#commit=${_commit}"
-        rust-toolchain.toml bindgen-kernel.py)
-sha256sums=('SKIP' '443a9c4613172ea352f49b114818a1d75ab048ec4bd2d75b388a7ab3a8a1f046' '84a03d5fea19cae243c89f50c1736c639622d25d4d1de8d7d53ebd8f603c0f62')
+        rust-toolchain.toml bindgen-kernel.py config neo.config)
+sha256sums=('SKIP' '443a9c4613172ea352f49b114818a1d75ab048ec4bd2d75b388a7ab3a8a1f046' '84a03d5fea19cae243c89f50c1736c639622d25d4d1de8d7d53ebd8f603c0f62' 'e8f3818e6bfa70166dd5caff228a0becfdd5d4f0165b589efa38150fd0b59cc9' '50e611aef167b6e18f21320701ac12e807343e237a47fd5534587fc5068433dd')
 
 # Kbuild takes ARCH literally and knows arm64, not aarch64.
 export ARCH=arm64
 export KBUILD_BUILD_HOST=archlinux
 export KBUILD_BUILD_USER=$pkgbase
 export KBUILD_BUILD_TIMESTAMP="$(date -Ru${SOURCE_DATE_EPOCH:+d @$SOURCE_DATE_EPOCH})"
+
+# Kbuild assigns BINDGEN itself, so an environment-only value is ignored.
+# Supply the wrapper and its real tool in every makepkg phase, not just prepare.
+_make() {
+  AURORA_BINDGEN_REAL="$srcdir/private-bindgen/rust-bindgen-0.73.2/target/release/bindgen" \
+    LIBCLANG_PATH="${AURORA_LIBCLANG_PATH:-/usr/lib/llvm18/lib}" \
+    RUSTUP_TOOLCHAIN=1.85.0 make LLVM="${AURORA_LLVM:-/usr/lib/llvm18/bin/}" \
+    BINDGEN="$srcdir/bindgen-kernel.py" "$@"
+}
 
 prepare() {
   cd $_srcname
@@ -76,18 +85,17 @@ prepare() {
   rustup toolchain install 1.99.0 --profile minimal
   RUSTUP_TOOLCHAIN=1.99.0 python3 tools/aurora-bindgen/build.py --output-dir "$srcdir/private-bindgen"
   export AURORA_BINDGEN_REAL="$srcdir/private-bindgen/rust-bindgen-0.73.2/target/release/bindgen"
-  export BINDGEN="$srcdir/bindgen-kernel.py"
   export RUSTUP_TOOLCHAIN=1.85.0
   rustup toolchain install 1.85.0 --profile minimal --component rust-src
   mkdir -p build/base
-  make O="$PWD/build/base" defconfig
-  scripts/kconfig/merge_config.sh -m -O "$PWD/build/base" build/base/.config arch/arm64/configs/asahi.config
-  make O="$PWD/build/base" olddefconfig
-  scripts/kconfig/merge_config.sh -m -O "$PWD/build/base" build/base/.config arch/arm64/configs/j700-radio.config arch/arm64/configs/j700.config
-  make O="$PWD/build/base" olddefconfig
-  scripts/kconfig/merge_config.sh -m -O "$PWD/build/base" build/base/.config arch/arm64/configs/j700-device-parity.config
-  make O="$PWD/build/base" olddefconfig prepare
-  make -s O="$PWD/build/base" kernelrelease > build/base/version
+  cp ../config build/base/.config
+  scripts/kconfig/merge_config.sh -m -O "$PWD/build/base" build/base/.config ../neo.config
+  _make O="$PWD/build/base" olddefconfig
+  grep -qx 'CONFIG_RUST=y' build/base/.config || {
+    echo 'linux-aurora requires Rust drivers; toolchain/configuration disabled CONFIG_RUST' >&2; return 1;
+  }
+  _make O="$PWD/build/base" prepare
+  _make -s O="$PWD/build/base" kernelrelease > build/base/version
 
   echo "Prepared $pkgbase version $(<build/base/version)"
 }
@@ -97,8 +105,7 @@ build() {
   echo "Building base..."
   export LLVM="${AURORA_LLVM:-/usr/lib/llvm18/bin/}" RUSTUP_TOOLCHAIN=1.85.0
   export AURORA_BINDGEN_REAL="$srcdir/private-bindgen/rust-bindgen-0.73.2/target/release/bindgen"
-  export BINDGEN="$srcdir/bindgen-kernel.py"
-  make O="$PWD/build/base" -j"${OMARCHY_BUILD_JOBS:-10}" Image modules dtbs
+  _make O="$PWD/build/base" -j"${OMARCHY_BUILD_JOBS:-10}" Image modules dtbs
 }
 
 _package_kernel() {
@@ -123,7 +130,7 @@ _package_kernel() {
   echo "$1" | install -Dm644 /dev/stdin "$modulesdir/pkgbase"
 
   echo "Installing modules..."
-  make O="$O" INSTALL_MOD_PATH="$pkgdir/usr" INSTALL_MOD_STRIP=1 modules_install
+  _make O="$O" INSTALL_MOD_PATH="$pkgdir/usr" INSTALL_MOD_STRIP=1 modules_install
 
   echo "Installing device trees..."
   install -Dt "$modulesdir/dtbs" "$O"/arch/arm64/boot/dts/apple/*.dtb
@@ -160,7 +167,12 @@ _package-headers() {
   #install -Dt "$builddir/tools/objtool" tools/objtool/objtool
 
   # required when DEBUG_INFO_BTF_MODULES is enabled
-  install -Dt "$builddir/tools/bpf/resolve_btfids" $O/tools/bpf/resolve_btfids/resolve_btfids
+  if grep -qx 'CONFIG_DEBUG_INFO_BTF=y' "$O/.config"; then
+    [[ -x $O/tools/bpf/resolve_btfids/resolve_btfids ]] || {
+      echo 'BTF is enabled but resolve_btfids was not built' >&2; return 1;
+    }
+    install -Dt "$builddir/tools/bpf/resolve_btfids" "$O/tools/bpf/resolve_btfids/resolve_btfids"
+  fi
 
   echo "Installing headers..."
   cp -t "$builddir" -a include $O/include
@@ -187,7 +199,7 @@ _package-headers() {
   find . -name 'Kconfig*' -exec install -Dm644 {} "$builddir/{}" \;
 
   echo "Installing unstripped VDSO..."
-  make O="$O" INSTALL_MOD_PATH="$pkgdir/usr" vdso_install link=
+  _make O="$O" INSTALL_MOD_PATH="$pkgdir/usr" vdso_install link=
 
   echo "Removing unneeded architectures..."
   local arch

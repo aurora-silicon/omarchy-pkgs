@@ -2,7 +2,7 @@ pkgbase=mesa-aurora
 pkgname=('mesa-aurora' 'vulkan-aurora')
 epoch=1
 pkgver=26.3.0_devel.r932.a0bcbcb28528
-pkgrel=1
+pkgrel=2
 pkgdesc='Aurora Asahi Gallium, Zink and Honeykrisp'
 arch=('aarch64')
 groups=('omarchy-platform-apple-silicon')
@@ -59,7 +59,8 @@ check() {
 package_mesa-aurora() {
   pkgdesc='Aurora native Asahi Gallium and Zink OpenGL drivers'
   depends=('expat' 'glibc' 'gcc-libs' 'libdrm' 'libglvnd' 'libx11' 'libxcb' 'libxext'
-           'libxshmfence' 'libxxf86vm' 'lm_sensors' 'wayland' 'zlib' 'zstd')
+           'libxshmfence' 'libxxf86vm' 'lm_sensors' 'wayland' 'zlib' 'zstd'
+           'vulkan-mesa-implicit-layers')
   provides=("mesa=$epoch:$pkgver" 'mesa-libgl' 'opengl-driver' 'libgbm.so')
   conflicts=('mesa')
   cp -a "$srcdir/mesa-stage/usr" "$pkgdir/"

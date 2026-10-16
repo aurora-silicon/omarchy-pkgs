@@ -4,20 +4,27 @@
 # a country without one. Whenever the regulatory domain lands on such a
 # country, switch to the world domain, whose policy is world-XZ.bin, so the
 # radio comes up with the most restrictive rules instead of not at all.
-policy=/usr/lib/firmware/mediatek/mt7932/policy
+policy=${AURORA_REGDOM_POLICY_DIR:-/usr/lib/firmware/mediatek/mt7932/policy}
+last_fallback=-60
+minimum_interval=60
 
 fall_back() {
   local country
   country=$(iw reg get | awk '$1 == "country" { sub(":", "", $2); print $2; exit }')
   [[ $country =~ ^[A-Z]{2}$ && ! -e $policy/$country.bin ]] || return 0
+  [[ $country != 00 ]] || return 0
+  local remaining=$((minimum_interval - SECONDS + last_fallback))
+  if (( remaining > 0 )); then
+    # Defer instead of dropping the hint: otherwise the radio can stay blocked
+    # forever when no later event arrives. A supported hint during the wait wins.
+    sleep "$remaining"
+    country=$(iw reg get | awk '$1 == "country" { sub(":", "", $2); print $2; exit }')
+    [[ $country =~ ^[A-Z]{2}$ && $country != 00 && ! -e $policy/$country.bin ]] || return 0
+  fi
+  last_fallback=$SECONDS
   echo "No MT7932 policy for $country; using the world regulatory domain"
   iw reg set 00
 }
-
-iw event | while read -r line; do
-  [[ $line == *"regulatory domain change"* ]] && fall_back
-done &
-watcher=$!
 
 # An initramfs built before it carried regulatory.db left cfg80211 without
 # one, and a country set then reaches the driver but not the global domain,
@@ -26,4 +33,9 @@ watcher=$!
 iw reg reload
 [[ ! -x /usr/bin/set-wireless-regdom ]] || /usr/bin/set-wireless-regdom
 fall_back
+iw event | while read -r line; do
+  [[ $line == *"regulatory domain change"* ]] && fall_back
+done &
+watcher=$!
+
 wait "$watcher"
