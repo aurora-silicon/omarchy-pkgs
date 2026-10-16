@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Check edge-only recipes and their declared compatibility upgrade versions."""
 import json
+import os
+import tempfile
 from pathlib import Path
 import subprocess
 import unittest
@@ -11,7 +13,11 @@ NAMES = ['linux-aurora', 'mesa-aurora', 'aura', 'uboot-aurora', 'aurora-bless',
 
 
 def srcinfo(name):
-    output = subprocess.check_output(['makepkg', '--printsrcinfo'], cwd=ROOT / 'pkgbuilds' / name, text=True)
+    # The checkout can be read-only in CI; makepkg still requires a writable build directory.
+    with tempfile.TemporaryDirectory(prefix='aurora-srcinfo-') as build:
+        output = subprocess.check_output(
+            ['makepkg', '--printsrcinfo'], cwd=ROOT / 'pkgbuilds' / name,
+            env={**os.environ, 'BUILDDIR': build}, text=True)
     base, packages, current = {}, {}, None
     for raw in output.splitlines():
         if ' = ' not in raw:
