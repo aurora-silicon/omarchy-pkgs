@@ -9,15 +9,15 @@
 # cold-boot qualification on M1 and M2.
 
 _auroraver=7.1.12
-_aurorarel=5
+_aurorarel=6
 pkgrel=1
 
 # Immutable pin on aurora-silicon/linux (branch aurora-wip). Every bump is a
 # PR that moves _commit; its cold-boot qualification is recorded in
-# docs/aurora-edge.md before channel publication. 5f6c917 merges #301, which
-# leaves the firmware-owned J700 DISP_CPU domain alone: without it the Neo
-# does not boot.
-_commit=5f6c917f2c824b3c87497e8bd7dd92a6de0efe60
+# docs/aurora-edge.md before channel publication. 99b5f912 fast-forwards
+# 5f6c917, which merged #301: that leaves the firmware-owned J700 DISP_CPU
+# domain alone, and without it the Neo does not boot.
+_commit=99b5f912426e65a2203363ea21d7d9cc50941a59
 
 # Any m1n1 1.6.1 loads these device trees. The Neo's own Stage 2 comes from the
 # image, so the floor stays where M1 and M2 users' m1n1-aurora already meets it.
