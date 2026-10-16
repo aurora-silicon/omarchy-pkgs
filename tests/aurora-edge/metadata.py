@@ -17,7 +17,8 @@ def srcinfo(name):
     with tempfile.TemporaryDirectory(prefix='aurora-srcinfo-') as build:
         output = subprocess.check_output(
             ['makepkg', '--printsrcinfo'], cwd=ROOT / 'pkgbuilds' / name,
-            env={**os.environ, 'BUILDDIR': build}, text=True)
+            env={**os.environ, 'BUILDDIR': build, 'PKGDEST': build,
+                 'SRCDEST': build, 'SRCPKGDEST': build, 'LOGDEST': build}, text=True)
     base, packages, current = {}, {}, None
     for raw in output.splitlines():
         if ' = ' not in raw:
