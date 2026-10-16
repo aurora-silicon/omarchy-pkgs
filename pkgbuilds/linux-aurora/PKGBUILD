@@ -10,7 +10,7 @@
 
 _auroraver=7.1.12
 _aurorarel=5
-pkgrel=2
+pkgrel=3
 
 # Immutable pin on aurora-silicon/linux (branch aurora-wip). Every bump is a
 # PR that moves _commit; its cold-boot qualification is recorded in
@@ -39,8 +39,10 @@ makedepends=(
 )
 options=('!strip')
 source=("linux::git+https://github.com/aurora-silicon/linux.git#commit=${_commit}"
-        rust-toolchain.toml bindgen-kernel.py config neo.config)
-sha256sums=('SKIP' '443a9c4613172ea352f49b114818a1d75ab048ec4bd2d75b388a7ab3a8a1f046' '84a03d5fea19cae243c89f50c1736c639622d25d4d1de8d7d53ebd8f603c0f62' 'e8f3818e6bfa70166dd5caff228a0becfdd5d4f0165b589efa38150fd0b59cc9' '50e611aef167b6e18f21320701ac12e807343e237a47fd5534587fc5068433dd')
+        rust-toolchain.toml bindgen-kernel.py config neo.config
+        0001-dwc3-export-event-cleanup.patch)
+sha256sums=('SKIP' '443a9c4613172ea352f49b114818a1d75ab048ec4bd2d75b388a7ab3a8a1f046' '84a03d5fea19cae243c89f50c1736c639622d25d4d1de8d7d53ebd8f603c0f62' 'e8f3818e6bfa70166dd5caff228a0becfdd5d4f0165b589efa38150fd0b59cc9' '50e611aef167b6e18f21320701ac12e807343e237a47fd5534587fc5068433dd'
+            '4601e2387fb4a334d8832b314cc891aba3687bf178f29dd0ff450d7a5d5f4d43')
 
 # Kbuild takes ARCH literally and knows arm64, not aarch64.
 export ARCH=arm64
