@@ -30,12 +30,32 @@ fall_back() {
 # one, and a country set then reaches the driver but not the global domain,
 # so nothing above would see it. Load the database from the root filesystem
 # and set the configured country again, now for real.
+# Start the event source before changing the domain. Keep fallback state in this
+# process, not a pipeline subshell. Periodic readback also closes the nl80211
+# subscription-registration gap (starting a process alone does not prove ready).
+coproc REG_EVENTS { exec iw event; }
+watcher=$REG_EVENTS_PID
+exec {events}<&"${REG_EVENTS[0]}"
+trap 'kill "$watcher" 2>/dev/null || true' EXIT
+
 iw reg reload
 [[ ! -x /usr/bin/set-wireless-regdom ]] || /usr/bin/set-wireless-regdom
 fall_back
-iw event | while read -r line; do
-  [[ $line == *"regulatory domain change"* ]] && fall_back
-done &
-watcher=$!
-
+while kill -0 "$watcher" 2>/dev/null; do
+  if IFS= read -r -t 5 -u "$events" line; then
+    [[ $line != *"regulatory domain change"* ]] || fall_back
+  else
+    status=$?
+    if (( status > 128 )); then
+      fall_back
+    else
+      break
+    fi
+  fi
+done
 wait "$watcher"
+status=$?
+trap - EXIT
+# A dead event stream must be restarted even when iw exited successfully.
+(( status != 0 )) || status=1
+exit "$status"

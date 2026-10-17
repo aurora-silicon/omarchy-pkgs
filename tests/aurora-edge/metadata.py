@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check edge-only recipes and their declared compatibility upgrade versions."""
 import json
+import hashlib
 import os
 import tempfile
 from pathlib import Path
@@ -32,6 +33,17 @@ def srcinfo(name):
 
 
 class EdgeMetadataTests(unittest.TestCase):
+    def test_local_kernel_and_firmware_inputs_match_recipe_checksums(self):
+        for name in ('linux-aurora', 'mesa-aurora', 'omarchy-aurora-firmware'):
+            package = next(iter(srcinfo(name).values()))
+            sources, digests = package['source'], package['sha256sums']
+            self.assertEqual(len(sources), len(digests))
+            for source, digest in zip(sources, digests):
+                if '://' not in source:
+                    with self.subTest(package=name, source=source):
+                        actual = hashlib.sha256((ROOT / 'pkgbuilds' / name / source).read_bytes()).hexdigest()
+                        self.assertEqual(actual, digest)
+
     def test_canonical_names_and_previous_draft_upgrades(self):
         for name in NAMES:
             for canonical in srcinfo(name):

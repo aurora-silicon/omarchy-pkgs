@@ -2,7 +2,7 @@ pkgbase=mesa-aurora
 pkgname=('mesa-aurora' 'vulkan-aurora')
 epoch=1
 pkgver=26.3.0_devel.r932.a0bcbcb28528
-pkgrel=2
+pkgrel=3
 pkgdesc='Aurora Asahi Gallium, Zink and Honeykrisp'
 arch=('aarch64')
 groups=('omarchy-platform-apple-silicon')
@@ -20,8 +20,9 @@ makedepends=('git' 'meson' 'ninja' 'python-mako' 'python-yaml' 'python-packaging
              'libx11' 'libxcb' 'libxext' 'libxfixes' 'libxrandr' 'libxshmfence' 'libxxf86vm'
              'wayland' 'wayland-protocols' 'vulkan-headers' 'libdisplay-info'
              'lm_sensors' 'zlib' 'zstd' 'xcb-util-keysyms')
-source=("mesa::git+$url.git#commit=$_commit")
-sha256sums=('SKIP')
+source=("mesa::git+$url.git#commit=$_commit"
+        0001-hk-preserve-library-assertion-mode-in-test.patch)
+sha256sums=('SKIP' 'e8684509bed4c22c89064399842ce7646ad1572c176b1794953454f80edbb412')
 options=('!debug')
 _options=(-Dplatforms=x11,wayland
   -Dgallium-drivers=asahi,zink,softpipe -Dvulkan-drivers=asahi
@@ -34,7 +35,11 @@ _meson() {
   meson setup --prefix /usr --libexecdir lib --sbindir bin --buildtype plain \
     --wrap-mode nodownload -Db_pie=true -Db_ndebug=true -Dpython.bytecompile=1 "$@"
 }
+prepare() {
+  patch -d mesa -Np1 -i "$srcdir/0001-hk-preserve-library-assertion-mode-in-test.patch"
+}
 build() {
+  # The bootstrap builds only three shader tools; the driver build runs tests.
   _meson mesa tools "${_options[@]}" -Dllvm=enabled -Dbuild-tests=false
   ninja -C tools -j "${OMARCHY_BUILD_JOBS:-10}" \
     src/compiler/clc/mesa_clc src/compiler/spirv/vtn_bindgen2 src/asahi/clc/asahi_clc
@@ -45,17 +50,25 @@ build() {
 
   _meson mesa build "${_options[@]}" --native-file tools.ini \
     -Dllvm=disabled -Dspirv-tools=disabled -Dmesa-clc=system -Dprecomp-compiler=system \
-    -Dbuild-tests=false
+    -Dbuild-tests=true
   meson compile -C build -j "${OMARCHY_BUILD_JOBS:-10}"
   DESTDIR="$srcdir/mesa-stage" meson install -C build --no-rebuild
 }
 check() {
-  # Mesa's own tests stay off: at this commit hk_sampler_bias_test undefines
-  # NDEBUG and calls nir_validate_shader, so it links only in debug builds.
+  meson test -C build --print-errorlogs \
+    --num-processes "${OMARCHY_BUILD_JOBS:-10}" || return 1
   # Nothing packaged may follow the system's LLVM or SPIRV-Tools.
-  ! find "$srcdir/mesa-stage" -name '*.so*' -type f -exec readelf -d {} + |
-    grep -E 'NEEDED.*(libLLVM|libSPIRV-Tools)'
+  [[ -d $srcdir/mesa-stage ]] || return 1
+  local binary dependencies
+  while IFS= read -r -d '' binary; do
+    dependencies=$(LC_ALL=C readelf -d "$binary") || return 1
+    if grep -Eq 'NEEDED.*(libLLVM|libSPIRV-Tools)' <<<"$dependencies"; then
+      echo "Unexpected compiler runtime dependency: $binary" >&2
+      return 1
+    fi
+  done < <(find "$srcdir/mesa-stage" -name '*.so*' -type f -print0)
 }
+
 package_mesa-aurora() {
   pkgdesc='Aurora native Asahi Gallium and Zink OpenGL drivers'
   depends=('expat' 'glibc' 'gcc-libs' 'libdrm' 'libglvnd' 'libx11' 'libxcb' 'libxext'

@@ -6,8 +6,8 @@ build() {
     [[ $hook != systemd ]] || systemd_initrd=true
   done
   if ! "$systemd_initrd"; then
-    echo 'aurora-vendor-order requires a systemd initramfs; busybox hooks are unsupported' >&2
-    return 1
+    echo 'aurora-vendor-order: legacy initramfs; AOP and Neo Wi-Fi wait for the root vendor-firmware service and required firmware' >&2
+    return 0
   fi
   add_binary bash
   add_binary modprobe

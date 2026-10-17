@@ -46,6 +46,21 @@ class KernelRecipeTests(unittest.TestCase):
                 self.assertNotIn('\n' + name + '=', original, 'Neo fragment overrides shared setting')
         self.assertIn('CONFIG_MT7932_FULLMAC=m', fragment)
 
+    def test_generated_config_must_keep_every_requested_capability(self):
+        validator = ROOT / 'pkgbuilds/linux-aurora/validate-config.py'
+        spec = importlib.util.spec_from_file_location('config_check', validator)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as temporary:
+            resolved = Path(temporary) / 'config'
+            fragment = validator.with_name('neo.config')
+            resolved.write_text(fragment.read_text())
+            module.validate(fragment, resolved)
+            resolved.write_text(fragment.read_text().replace(
+                'CONFIG_SND_SOC_APPLE_T8140_AOP_AUDIO=m', '# CONFIG_SND_SOC_APPLE_T8140_AOP_AUDIO is not set'))
+            with self.assertRaisesRegex(ValueError, 'CONFIG_SND_SOC_APPLE_T8140_AOP_AUDIO'):
+                module.validate(fragment, resolved)
+
     def test_headers_require_resolver_only_when_btf_enabled(self):
         recipe = ROOT / 'pkgbuilds/linux-aurora/PKGBUILD'
         for enabled, resolver, expected in [(False, False, 0), (True, False, 1), (True, True, 0)]:
@@ -67,6 +82,23 @@ install() { :; }; cp() { :; }; rm() { :; }; find() { :; }; _make() { :; }
 _package-headers
 ''', recipe, root)
                 self.assertEqual(result.returncode, expected, result.stderr)
+
+
+class MesaRecipeTests(unittest.TestCase):
+    def test_cpu_tests_fail_the_package_and_runtime_abi_is_checked(self):
+        recipe = ROOT / 'pkgbuilds/mesa-aurora/PKGBUILD'
+        for test_status, runtime, reader_status, expected in [
+            (0, '', 0, 0), (1, '', 0, 1), (0, 'libLLVM.so.23', 0, 1),
+            (0, 'libSPIRV-Tools.so', 0, 1), (0, '', 1, 1)]:
+            with self.subTest(tests=test_status, runtime=runtime, reader=reader_status), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                stage = root / 'mesa-stage'
+                stage.mkdir()
+                (stage / 'driver.so').write_bytes(b'fixture')
+                result = shell('source "$1"\nsrcdir="$2"\nmeson() { printf \'%s\\n\' "$*"; return "$TEST_STATUS"; }\nreadelf() { [[ -z $RUNTIME ]] || echo "NEEDED $RUNTIME"; return "$READER_STATUS"; }\ncheck\n', recipe, root, env=dict(os.environ, TEST_STATUS=str(test_status),
+                          RUNTIME=runtime, READER_STATUS=str(reader_status)))
+                self.assertEqual(result.returncode, expected, result.stderr)
+                self.assertIn('test -C build --print-errorlogs', result.stdout)
 
 
 class QualificationTests(unittest.TestCase):
@@ -93,12 +125,33 @@ class QualificationTests(unittest.TestCase):
 
 
 class FirmwareTests(unittest.TestCase):
-    def test_systemd_initrd_is_required_before_installing_any_hook_files(self):
+    def test_legacy_initrd_warns_and_keeps_late_admission_without_adding_early_files(self):
         hook = ROOT / 'pkgbuilds/omarchy-aurora-firmware/aurora-vendor-order.install'
-        functions = 'add_binary() { :; }; add_module() { :; }; add_file() { :; }; add_symlink() { :; }; '
-        for hooks, expected in [('base udev', 1), ('base systemd', 0)]:
+        functions = 'add_binary() { echo ADDED; }; add_module() { echo ADDED; }; add_file() { echo ADDED; }; add_symlink() { echo ADDED; }; '
+        for hooks, expected in [('base udev', 0), ('base systemd', 0)]:
             result = shell(functions + 'source "$1"; read -ra HOOKS <<<"$2"; build', hook, hooks)
             self.assertEqual(result.returncode, expected, result.stderr)
+            if hooks == 'base udev':
+                self.assertIn('root vendor-firmware service', result.stderr)
+                self.assertNotIn('ADDED', result.stdout)
+            else:
+                self.assertIn('ADDED', result.stdout)
+
+    def test_hint_in_event_subscription_gap_is_reconciled_and_dead_watcher_fails(self):
+        script = ROOT / 'pkgbuilds/omarchy-aurora-firmware/aurora-regdom-fallback'
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            iw = root / 'iw'
+            (root / 'country').write_text('00')
+            iw.write_text('#!/bin/bash\ncase "$*" in\n  event)\n    sleep 0.2\n    # This hint arrives after the initial read, before subscription is ready.\n    echo PL > "$FIXTURE/country"\n    sleep 5.5\n    exit 0 ;;\n  \'reg reload\') exit 0 ;;\n  \'reg get\') printf \'country %s:\\n\' "$(cat "$FIXTURE/country")" ;;\n  \'reg set 00\') echo 00 > "$FIXTURE/country"; echo fallback >> "$FIXTURE/calls" ;;\n  *) exit 99 ;;\nesac\n')
+            iw.chmod(0o755)
+            code = script.read_text().replace('/usr/bin/set-wireless-regdom', str(root / 'no-host-helper'))
+            result = subprocess.run(['bash', '-c', code], text=True, capture_output=True, timeout=9,
+                env=dict(os.environ, PATH=str(root) + ':' + os.environ['PATH'], FIXTURE=str(root),
+                         AURORA_REGDOM_POLICY_DIR=str(root / 'policy')))
+            self.assertNotEqual(result.returncode, 0, 'systemd must restart a dead event stream')
+            self.assertEqual((root / 'calls').read_text().splitlines(), ['fallback'])
+            self.assertEqual((root / 'country').read_text().strip(), '00')
 
     def test_external_hints_are_rate_limited_and_world_does_not_loop(self):
         path = ROOT / 'pkgbuilds/omarchy-aurora-firmware/aurora-regdom-fallback'

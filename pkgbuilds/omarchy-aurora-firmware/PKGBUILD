@@ -1,6 +1,6 @@
 pkgname=omarchy-aurora-firmware
 pkgver=20261014
-pkgrel=2
+pkgrel=3
 pkgdesc='Order Apple peripheral admission after device firmware extraction'
 arch=('aarch64')
 groups=('omarchy-platform-apple-silicon')
@@ -13,7 +13,16 @@ source=(aurora-firmware-order.conf aurora-peripheral-firmware.sh
         95-aurora-vendor-order.conf aurora-vendor-order-cryptsetup.conf
         20-aurora-vendor-order.conf aurora-regdom-fallback
         aurora-regdom-fallback.service 86-aurora-regdom-fallback.rules)
-sha256sums=('e6338787cc03c7704589df20f7551ac17bc2ae25aa2f8df3b6d9532a1c5b79f9' '70f1fcc7890963fe9d7efda0da6f917557a7278371586c4fc2962c1b1c7cc197' '328c689685f21bb760f3bea7984b42060a04f6a386d4a35b8237de95328ccc31' '98f5f6e6659b8f4b65c4ed38badf7811eade3572941c7906ae9b87280a11d37f' '8ef54ee9d0f438864f2a99bbb8c0cf53aa8b7e0e217bd74b2fd324ff0b882a32' '298c2abc4c0e11ab03470209b4ff93c184eed40d3cf9e1913e41ba0ea0179837' 'e200d1cf003d60eca4a825aec9475f36dd8db6a5a8805eaac93e3fecfa0b3cb0' 'f19ec51b96b94c7373d01ebefe85530e32791f17fd984cd43b3dfa0444eb3b80' '5aeb12c046553b53e5edd75a7c94a082e8c4edc4ee1226f5163d5ce9774f4d3c' '3b994ae27fd1a14ccd569cfc103b205807fe262fe2487446de02d870455e1ec8')
+sha256sums=('e6338787cc03c7704589df20f7551ac17bc2ae25aa2f8df3b6d9532a1c5b79f9'
+            '70f1fcc7890963fe9d7efda0da6f917557a7278371586c4fc2962c1b1c7cc197'
+            '328c689685f21bb760f3bea7984b42060a04f6a386d4a35b8237de95328ccc31'
+            'eae8ea44ed6bec92cc0fa111e872bdb4717d365482337de7b9def8532b10123b'
+            '8ef54ee9d0f438864f2a99bbb8c0cf53aa8b7e0e217bd74b2fd324ff0b882a32'
+            '298c2abc4c0e11ab03470209b4ff93c184eed40d3cf9e1913e41ba0ea0179837'
+            'e200d1cf003d60eca4a825aec9475f36dd8db6a5a8805eaac93e3fecfa0b3cb0'
+            'decec60daf843a07c6281433cff4569d1d02c48a15198d3ebdfd8e06445d2d31'
+            '5aeb12c046553b53e5edd75a7c94a082e8c4edc4ee1226f5163d5ce9774f4d3c'
+            '3b994ae27fd1a14ccd569cfc103b205807fe262fe2487446de02d870455e1ec8')
 package() {
   install -Dm644 aurora-firmware-order.conf "$pkgdir/usr/lib/modprobe.d/aurora-firmware-order.conf"
   install -Dm755 aurora-peripheral-firmware.sh "$pkgdir/usr/lib/omarchy/initcpio/aurora-peripheral-firmware.sh"
