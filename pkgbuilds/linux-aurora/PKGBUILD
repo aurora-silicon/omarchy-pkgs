@@ -8,16 +8,15 @@
 # for Macs on the Omarchy edge channel. It reaches rc and stable only after
 # cold-boot qualification on M1 and M2.
 
+epoch=1
 _auroraver=7.1.12
-_aurorarel=5
-pkgrel=4
+_aurorarel=6
+pkgrel=1
 
-# Immutable pin on aurora-silicon/linux (branch aurora-wip). Every bump is a
+# Immutable pin on aurora-silicon/linux (branch aurora-wip-rebase). Every bump is a
 # PR that moves _commit; its cold-boot qualification is recorded in
-# the PR's attached qualification evidence before channel publication. 5f6c917 merges #301, which
-# leaves the firmware-owned J700 DISP_CPU domain alone: without it the Neo
-# does not boot.
-_commit=5f6c917f2c824b3c87497e8bd7dd92a6de0efe60
+# the PR's attached qualification evidence before channel publication.
+_commit=0bbaaa0631957c56c3916ad2c22daf609a748bcc
 
 # Any m1n1 1.6.1 loads these device trees. The Neo's own Stage 2 comes from the
 # image, so the floor stays where M1 and M2 users' m1n1-aurora already meets it.
@@ -39,15 +38,13 @@ makedepends=(
 )
 options=('!strip')
 source=(validate-config.py "linux::git+https://github.com/aurora-silicon/linux.git#commit=${_commit}"
-        rust-toolchain.toml bindgen-kernel.py config neo.config
-        0001-dwc3-export-event-cleanup.patch)
+        rust-toolchain.toml bindgen-kernel.py config neo.config)
 sha256sums=('e54876197d94c291e15e175dffc6e889670f59e828c5762a56cf6ac1a5071c1a'
             'SKIP'
             '443a9c4613172ea352f49b114818a1d75ab048ec4bd2d75b388a7ab3a8a1f046'
             '84a03d5fea19cae243c89f50c1736c639622d25d4d1de8d7d53ebd8f603c0f62'
             'e8f3818e6bfa70166dd5caff228a0becfdd5d4f0165b589efa38150fd0b59cc9'
-            'beb1f56dc8b27f02a6a99e86efe04f5a91417c0c55425e46da7ca9865673dd04'
-            '4601e2387fb4a334d8832b314cc891aba3687bf178f29dd0ff450d7a5d5f4d43')
+            'beb1f56dc8b27f02a6a99e86efe04f5a91417c0c55425e46da7ca9865673dd04')
 
 # Kbuild takes ARCH literally and knows arm64, not aarch64.
 export ARCH=arm64
@@ -61,7 +58,7 @@ _make() {
   AURORA_BINDGEN_REAL="$srcdir/private-bindgen/rust-bindgen-0.73.2/target/release/bindgen" \
     LIBCLANG_PATH="${AURORA_LIBCLANG_PATH:-/usr/lib/llvm18/lib}" \
     RUSTUP_TOOLCHAIN=1.85.0 make LLVM="${AURORA_LLVM:-/usr/lib/llvm18/bin/}" \
-    BINDGEN="$srcdir/bindgen-kernel.py" "$@"
+    BINDGEN="$srcdir/bindgen-kernel.py" LOCALVERSION= "$@"
 }
 
 prepare() {
@@ -100,6 +97,7 @@ prepare() {
   # Keep shared kexec support: at this pin Neo radio admission acquires the
   # kernel kexec blocker before retaining DMA/firmware ownership. Both kexec
   # load APIs and execution reject while that blocker is held.
+  scripts/config --file build/base/.config --set-str LOCALVERSION "$_kernelname" --disable LOCALVERSION_AUTO
   _make O="$PWD/build/base" olddefconfig
   python3 ../validate-config.py ../neo.config build/base/.config
   grep -qx 'CONFIG_RUST=y' build/base/.config || {

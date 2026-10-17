@@ -1,14 +1,15 @@
 pkgbase=mesa-aurora
 pkgname=('mesa-aurora' 'vulkan-aurora')
 epoch=1
-pkgver=26.3.0_devel.r932.a0bcbcb28528
-pkgrel=3
+pkgver=26.3.0_devel.20261017.af3d9c6fc84
+pkgrel=1
 pkgdesc='Aurora Asahi Gallium, Zink and Honeykrisp'
 arch=('aarch64')
 groups=('omarchy-platform-apple-silicon')
 url='https://github.com/aurora-silicon/mesa'
 license=('MIT')
-_commit=a0bcbcb2852845ecac9731999fc165a7f7cd9b8f
+_commit=af3d9c6fc84f6e5bc6ee23f1eb0b47a5ee466826
+# Matched to the DRM UAPI in linux aurora-wip-rebase.
 # The drivers link neither LLVM nor SPIRV-Tools. Arch Linux ARM moves both
 # (llvm-libs changes soname every major, SPIRV-Tools has no versioned soname),
 # and a Mesa linked to the old ones leaves the Neo without a GPU until this
