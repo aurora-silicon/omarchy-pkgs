@@ -1,0 +1,10 @@
+post_install() {
+  cat <<'EOF'
+Aurora Display Hint: enable in each desktop user's graphical session with:
+  systemctl --user daemon-reload
+  systemctl --user enable --now aurora-display-notifier.service
+After installation, replug the adapter so the new udev marker is applied.
+For Hyprland without graphical-session.target, use session start/stop hooks;
+see /usr/share/doc/aurora-display-hint/README.md for details and limitations.
+EOF
+}
