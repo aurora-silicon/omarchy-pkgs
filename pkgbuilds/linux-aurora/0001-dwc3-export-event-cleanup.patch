@@ -1,0 +1,33 @@
+From e87b71da6428f91b547d7405a82a038aac2e982d Mon Sep 17 00:00:00 2001
+From: Ryan Murray <ryan@aurorasilicon.org>
+Date: Thu, 15 Oct 2026 21:25:06 +1100
+Subject: [PATCH] usb: dwc3: Export dwc3_event_buffers_cleanup()
+
+The Apple glue calls dwc3_event_buffers_cleanup() when it stops the
+core, but the function is not exported. With USB_DWC3=y and
+USB_DWC3_APPLE=m (or both modular) modpost fails:
+
+  ERROR: modpost: "dwc3_event_buffers_cleanup" [drivers/usb/dwc3/dwc3-apple.ko] undefined!
+
+Export it like the other core helpers the glue drivers use
+(dwc3_enable_susphy(), dwc3_core_exit()).
+
+Fixes: f5afac94ca29 ("drm/apple: compose lean J700 display and automatic recovery candidate")
+Assisted-by: LLM
+Signed-off-by: Ryan Murray <ryan@aurorasilicon.org>
+---
+ drivers/usb/dwc3/core.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/usb/dwc3/core.c b/drivers/usb/dwc3/core.c
+index c2bbcbcf3797a2..498325fa1001da 100644
+--- a/drivers/usb/dwc3/core.c
++++ b/drivers/usb/dwc3/core.c
+@@ -610,6 +610,7 @@ void dwc3_event_buffers_cleanup(struct dwc3 *dwc)
+ 	reg = dwc3_readl(dwc, DWC3_GEVNTCOUNT(0));
+ 	dwc3_writel(dwc, DWC3_GEVNTCOUNT(0), reg);
+ }
++EXPORT_SYMBOL_GPL(dwc3_event_buffers_cleanup);
+ 
+ static void dwc3_core_num_eps(struct dwc3 *dwc)
+ {

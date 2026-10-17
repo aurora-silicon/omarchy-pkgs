@@ -1,6 +1,14 @@
 #!/bin/bash
 # SPDX-License-Identifier: MIT
 build() {
+  local hook systemd_initrd=false
+  for hook in "${HOOKS[@]}"; do
+    [[ $hook != systemd ]] || systemd_initrd=true
+  done
+  if ! "$systemd_initrd"; then
+    echo 'aurora-vendor-order requires a systemd initramfs; busybox hooks are unsupported' >&2
+    return 1
+  fi
   add_binary bash
   add_binary modprobe
   add_binary grep

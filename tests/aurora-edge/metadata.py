@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Check edge-only recipes and their declared compatibility upgrade versions."""
 import json
+import os
+import tempfile
 from pathlib import Path
 import subprocess
 import unittest
@@ -11,7 +13,12 @@ NAMES = ['linux-aurora', 'mesa-aurora', 'aura', 'uboot-aurora', 'aurora-bless',
 
 
 def srcinfo(name):
-    output = subprocess.check_output(['makepkg', '--printsrcinfo'], cwd=ROOT / 'pkgbuilds' / name, text=True)
+    # The checkout can be read-only in CI; makepkg still requires a writable build directory.
+    with tempfile.TemporaryDirectory(prefix='aurora-srcinfo-') as build:
+        output = subprocess.check_output(
+            ['makepkg', '--printsrcinfo'], cwd=ROOT / 'pkgbuilds' / name,
+            env={**os.environ, 'BUILDDIR': build, 'PKGDEST': build,
+                 'SRCDEST': build, 'SRCPKGDEST': build, 'LOGDEST': build}, text=True)
     base, packages, current = {}, {}, None
     for raw in output.splitlines():
         if ' = ' not in raw:
@@ -80,7 +87,9 @@ class EdgeMetadataTests(unittest.TestCase):
     def test_mesa_epoch_and_existing_neo_versions_upgrade(self):
         installed = {'mesa-aurora': '1:26.3.0_devel-932.a0bcbcb28528',
                      'linux-aurora': '7.1.12.aurora4-20261013.d08fd52e1619',
-                     'speakerguardd': '0.1.0.aurora1-e03febfe52a5'}
+                     'speakerguardd': '0.1.0.aurora2-e03febfe52a5',
+                     'aurora-audio': '4.1.aurora2-b2da7512e9bf',
+                     'alsa-ucm-conf-aurora': '10.aurora2-e55107ad9ba2'}
         for name, old in installed.items():
             package = srcinfo(name)[name]
             prefix = package.get('epoch', ['0'])[0] + ':'
