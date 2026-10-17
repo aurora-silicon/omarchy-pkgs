@@ -1,7 +1,7 @@
 # Maintainer: David Heinemeier Hansson <david@hey.com>
 
 pkgname=signed
-pkgver=0.2.0
+pkgver=0.3.1
 pkgrel=1
 pkgdesc='Sign PDFs and fill them in with text and dates'
 arch=('x86_64' 'aarch64')
@@ -21,7 +21,7 @@ depends=(
 )
 makedepends=('gcc' 'make')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('5b72a3e6c418ef99b36b3e060e6441103c11c9ff2c3ba4b2582a2ffc146a4296')
+sha256sums=('e38bc1a4c9b034a361d6cfbd1e9a41e4871f93fa2ef0b4b4e36276f57b2f566f')
 
 build() {
   cd "$srcdir/$pkgname-$pkgver"

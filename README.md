@@ -190,6 +190,11 @@ themes and fonts. A package that needs rebuilding when a dependency moves
 stays off it and reaches `rc` and `stable` with the release, together with
 the libraries it was built for.
 
+The three channels serve the same file. A merge that publishes a fast-ring
+build writes it to all three, and the same run copies `edge`'s file to `rc` or
+`stable` when either is behind, so moving a package onto the fast ring brings
+its current build along (see [Republish a package](#republish-a-package)).
+
 Both halves are enforced. `rebuild_on` and `"release_ring": "fast"` cannot be
 combined. And after a fast-ring package builds, `build-pr.yml` runs
 `bin/check-fast-ring`, which installs the package on `edge`, `rc` and `stable`
@@ -230,6 +235,12 @@ package that `edge` already holds at that version for that architecture; bump
 `pkgrel` to publish that one again. Spell the names as the directories under
 `pkgbuilds/`: an unknown name is ignored and the run still passes.
 
+A fast-ring package `edge` already holds is not skipped everywhere: every
+publish run ends by bringing `rc` and `stable` in line with `edge` for its
+fast-ring packages (`bin/promote-channel --fast-ring`), copying `edge`'s file
+where they are behind. Naming a fast-ring package here repairs a channel that
+never got it, such as one that joined the fast ring after its last build.
+
 For a run that failed, see [When a publish fails](#when-a-publish-fails).
 
 ### Build a package without publishing
@@ -269,6 +280,39 @@ a local checkout.
    packages included, from both architectures. It refuses a package that
    still has a recipe on `master`. Package files stay in the bucket: nothing
    references them once the entries are gone.
+
+### Promote a channel
+
+Edge collects every merge; rc and stable move only when someone promotes
+them. Run **Promote channel** from the Actions tab, or:
+
+```bash
+gh workflow run promote.yml -R omacom/omarchy-pkgs -f direction="edge -> rc"
+gh workflow run promote.yml -R omacom/omarchy-pkgs -f direction="edge -> rc" -f dry_run=true   # plan only
+gh workflow run promote.yml -R omacom/omarchy-pkgs -f direction="rc -> stable" -f packages="<pkgbase> ..."
+```
+
+For each architecture, `bin/promote-channel` moves every pkgbase the source
+channel holds a newer version of, or one the destination lacks, unless its
+recipe on `master` keeps it out:
+
+| Held back | Why |
+|---|---|
+| `"release_ring": "fast"` | Already published to `rc` and `stable` at merge |
+| `"pinned": true`, into `rc` | The release pair reaches `rc` through a release; `rc -> stable` carries it |
+| `"channels"` without the destination | Never published there |
+| No recipe on `master` | Retired; [unpublish it](#retire-a-package) instead |
+| Destination ahead on any of its packages | Nothing moves backwards, and a pkgbase moves whole |
+
+It copies the exact files the source serves, checks each against the source
+database's SHA-256, and publishes them with `bin/publish-artifact` in batches
+of about 2 GiB, inside the same lock as merges. Nothing is removed from the
+destination. A re-run after a failure picks up where it stopped.
+
+The run's summary lists what moved and what stayed back, with the reason;
+the full plan is kept as the `promote-record-<run-id>` artifact for 90 days,
+and a run that publishes appends to the [publish log](#read-the-publish-log)
+with who ran it.
 
 ### Check that a version is live
 
@@ -332,6 +376,21 @@ for a cancelled one, [check the channel](#check-that-a-version-is-live).
 
 `slots[].status` is `published` or `failed`. An empty `slots` means the run
 wrote no channel.
+
+A [promotion](#promote-a-channel) appends a line with `"kind": "promote"`
+(publish runs have no `kind`) and these fields besides `time`, `commit`,
+`run`, `event`, `target` and `slots`:
+
+| Field | Meaning |
+|---|---|
+| `from`, `to` | The channels: `edge` → `rc`, or `rc` → `stable` |
+| `actor` | Who started the run |
+| `packages` | The pkgbases it was limited to; empty for everything eligible |
+| `result` | `success` or `failed` |
+| `plan` | Each package promoted: `arch`, `base`, `name`, `from_version`, `to_version` (`null` when new to the destination), `file`, `size` |
+| `held` | Per architecture, how many packages stayed back, by reason |
+
+`sources` is always empty on a promotion.
 
 ```bash
 log=https://pkgs.omarchy.org/publish-log.jsonl
@@ -484,13 +543,13 @@ Details: [docs/upstream-sources.md](docs/upstream-sources.md),
 
 ## Releases
 
-Cutting an Omarchy release and promoting a channel are **not** in the GitHub
-workflows. They are done with `bin/omarchy-release` and `bin/repo advance`,
-which were written for the old repository host, now abandoned, and work on a
-local copy of the published tree.
+Promoting a channel is a workflow: see [Promote a channel](#promote-a-channel).
 
-Read [docs/releases.md](docs/releases.md) before cutting a release or
-promoting a channel.
+Cutting an Omarchy release is **not** in the GitHub workflows yet. Building
+the release pair for `rc` is done with `bin/omarchy-release`, which was
+written for the old repository host, now abandoned.
+
+Read [docs/releases.md](docs/releases.md) before cutting a release.
 
 ## Rules
 
