@@ -15,10 +15,10 @@ pkgrel=1
 # Immutable pin on aurora-silicon/linux (branch aurora-wip). Every bump is a
 # PR that moves _commit; its cold-boot qualification is recorded in
 # the PR's attached qualification evidence before channel publication.
-# d18a1305 fast-forwards 5f6c917, which merged #301: that leaves the
+# 3abf4a56 fast-forwards 5f6c917, which merged #301: that leaves the
 # firmware-owned J700 DISP_CPU domain alone, and without it the Neo does not
 # boot. It also carries the DWC3 export (#321), so no source patch is needed.
-_commit=d18a1305826a98640eba7bd9124771ac414ccd6d
+_commit=3abf4a56b59e323026f9a6e2fe9a0d4307c251d5
 
 # Any m1n1 1.6.1 loads these device trees. The Neo's own Stage 2 comes from the
 # image, so the floor stays where M1 and M2 users' m1n1-aurora already meets it.
