@@ -189,7 +189,8 @@ jobs:
     # The name GitHub made from the matrix before it carried the runner, so
     # the checks on a pull request keep the names they had.
     name: build (${{ matrix.package }}, ${{ matrix.arch }}, ${{ matrix.channels }}, ${{ matrix.publish_arches }})
-    runs-on: ${{ matrix.runner && fromJSON(matrix.runner) || (matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || fromJSON('["self-hosted","omarchy-builder"]')) }}
+    # This qualification branch uses hosted native ARM without Namespace.
+    runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || fromJSON('["self-hosted","omarchy-builder"]') }}
     timeout-minutes: 180
     strategy:
       fail-fast: false
