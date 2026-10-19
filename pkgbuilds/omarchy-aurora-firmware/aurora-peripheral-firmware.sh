@@ -37,10 +37,15 @@ if grep -aq 'apple,j700' "$compatible"; then
 fi
 
 if "$neo"; then
-  if "$radio_ready"; then "$modprobe_command" mt7932-fullmac; fi
+  if "$radio_ready"; then
+    "$modprobe_command" mt7932-fullmac
+    # Only the root firmware unit opts in. The initrd keeps Bluetooth out so
+    # its Wi-Fi module dependency cannot probe before firmware extraction.
+    if [ "${AURORA_ADMIT_BLUETOOTH:-0}" = 1 ]; then
+      "$modprobe_command" mt7932_bt_pcie
+    fi
+  fi
 else
   # Preserve ordinary non-Neo admission even if vendor extraction failed.
   "$modprobe_command" aop
 fi
-# Bluetooth is deliberately admitted later by its existing gated PCI service,
-# after root firmware extraction. It is not necessary to unlock the root disk.
