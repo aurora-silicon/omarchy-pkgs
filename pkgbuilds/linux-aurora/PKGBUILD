@@ -10,7 +10,7 @@
 
 _auroraver=7.1.12
 _aurorarel=8
-pkgrel=1
+pkgrel=2
 
 # Immutable pin on omacom/linux-aurora (branch integration/aurora). Every bump is a
 # PR that moves _commit; its cold-boot qualification is recorded in
@@ -42,7 +42,7 @@ sha256sums=('e54876197d94c291e15e175dffc6e889670f59e828c5762a56cf6ac1a5071c1a'
             'SKIP'
             '443a9c4613172ea352f49b114818a1d75ab048ec4bd2d75b388a7ab3a8a1f046'
             '84a03d5fea19cae243c89f50c1736c639622d25d4d1de8d7d53ebd8f603c0f62'
-            '0732060bdf4215c4e00e02afaca378044658923831a9bdae31f25a48e21527e5'
+            '10c19dccd77c249a9723be52b997a9ce4324cf1a33d6c9727723984ae3177f46'
             '8e81d2a1c317a6080966b0d52cbb241ff6d4cd7d32ea9aaddb8dfc7aec0b6684'
             '6804a0b0ef200548b9ee4b7f10a345165dc6c1ba2ef9de00e2b43c48e8a58440')
 
@@ -116,6 +116,11 @@ prepare() {
   python3 ../validate-config.py ../neo.config build/base/.config
   grep -qx 'CONFIG_RUST=y' build/base/.config || {
     echo 'linux-aurora requires Rust drivers; toolchain/configuration disabled CONFIG_RUST' >&2; return 1;
+  }
+  # Native ARM64 Steam selects an inherited 4K process tree with userpages.
+  # Keep the base-config requirement checked after Kconfig resolution too.
+  grep -qx 'CONFIG_ARM64_USER4K_EXPERIMENTAL=y' build/base/.config || {
+    echo 'linux-aurora requires 4K user pages for native Steam' >&2; return 1;
   }
   _make O="$PWD/build/base" prepare
   _make -s O="$PWD/build/base" kernelrelease > build/base/version
