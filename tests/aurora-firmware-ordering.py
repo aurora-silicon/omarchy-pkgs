@@ -19,8 +19,10 @@ INPUTS = (
     'mediatek/MT7932B1_OS_TypeB_0.1.133.0_260128190103.bin',
     'mediatek/MT7932_PTB_IzubaA_0.1.0.0_20251021141303.ptx',
     'mediatek/j700-mt7932-btcal.bin', 'mediatek/j700-mt7932-bdaddr.bin',
-    'mediatek/mt7932/policy/US.bin', 'mediatek/mt7932/policy/world-XZ.bin',
+    'mediatek/mt7932/policy/world-XZ.bin',
 )
+# Country policies are optional: the driver falls back to world-XZ without them.
+OPTIONAL = ('mediatek/mt7932/policy/US.bin',)
 
 
 class AdmissionTests(unittest.TestCase):
@@ -29,7 +31,7 @@ class AdmissionTests(unittest.TestCase):
             work = Path(temporary)
             compatible = work / 'compatible'
             compatible.write_bytes(model.encode() + b'\0')
-            for name in INPUTS:
+            for name in INPUTS + OPTIONAL:
                 if name != missing:
                     target = work / 'firmware/vendor' / name
                     target.parent.mkdir(parents=True, exist_ok=True)
@@ -62,6 +64,12 @@ class AdmissionTests(unittest.TestCase):
         for name in INPUTS[1:]:
             with self.subTest(missing=name):
                 self.assertEqual(self.probe(root=True, missing=name), (0, ['aop']))
+
+    def test_missing_country_policy_still_admits_both_radios(self):
+        for name in OPTIONAL:
+            with self.subTest(missing=name):
+                self.assertEqual(self.probe(root=True, missing=name),
+                                 (0, ['aop', 'mt7932-fullmac', 'mt7932_bt_pcie']))
 
     def test_failed_wifi_load_cannot_admit_bluetooth(self):
         self.assertEqual(self.probe(root=True, fail_wifi=True), (1, ['aop', 'mt7932-fullmac']))
