@@ -25,8 +25,14 @@ _commit=af3d9c6fc84f6e5bc6ee23f1eb0b47a5ee466826
 #
 # The payload is x86 code for an aarch64 host, so this is arch=any and must be
 # built on x86_64 Arch Linux with [multilib] enabled for the lib32-* packages.
-# The i686 build reuses the x86_64 build's CL compilers, so it needs no 32-bit
-# clang or SPIR-V translator.
+#
+# The drivers link neither LLVM nor SPIRV-Tools, as in mesa-aurora. They load
+# inside the guest rootfs, whose LLVM is whatever its distribution ships: a
+# driver linked to this builder's libLLVM.so.N fails to load there, leaving
+# the game without a GPU driver. lm_sensors is off for the same reason (its
+# soname differs between distributions). LLVM is needed only to
+# precompile the CL shaders, so a first native build makes those compilers and
+# both driver builds use them; no 32-bit clang, LLVM or SPIR-V translator.
 makedepends=('git' 'meson' 'ninja' 'python-mako' 'python-yaml' 'python-packaging'
              'python-pycparser' 'python-ply' 'bison' 'flex' 'glslang'
              'clang' 'llvm' 'libclc' 'spirv-llvm-translator' 'spirv-tools' 'spirv-headers'
@@ -34,7 +40,7 @@ makedepends=('git' 'meson' 'ninja' 'python-mako' 'python-yaml' 'python-packaging
              'libdrm' 'expat' 'libglvnd' 'libx11' 'libxcb' 'libxext' 'libxfixes' 'libxrandr'
              'libxshmfence' 'libxxf86vm' 'wayland' 'wayland-protocols' 'vulkan-headers'
              'vulkan-icd-loader' 'libdisplay-info' 'lm_sensors' 'zlib' 'zstd' 'libelf'
-             'lib32-llvm' 'lib32-libdrm' 'lib32-expat' 'lib32-libglvnd' 'lib32-libx11'
+             'lib32-libdrm' 'lib32-expat' 'lib32-libglvnd' 'lib32-libx11'
              'lib32-libxcb' 'lib32-libxext' 'lib32-libxfixes' 'lib32-libxrandr'
              'lib32-libxshmfence' 'lib32-libxxf86vm' 'lib32-wayland' 'lib32-vulkan-icd-loader'
              'lib32-libdisplay-info' 'lib32-lm_sensors' 'lib32-zlib' 'lib32-zstd'
@@ -50,31 +56,36 @@ options=('!strip' '!debug' '!lto')
 
 _layer=usr/share/guestos/aurora-fex-mesa-layer
 _options=(--prefix=/usr --buildtype=release -Db_ndebug=true --wrap-mode=nodownload
-  -Dplatforms=x11,wayland -Dgallium-drivers=asahi,zink,llvmpipe,softpipe
+  -Dplatforms=x11,wayland -Dgallium-drivers=asahi,zink,softpipe
   -Dvulkan-drivers=asahi -Dvulkan-layers= -Dglx=dri -Degl=enabled -Dgbm=enabled
-  -Dgles1=disabled -Dgles2=enabled -Dopengl=true -Dllvm=enabled -Dgallium-rusticl=false
+  -Dgles1=disabled -Dgles2=enabled -Dopengl=true -Dgallium-rusticl=false
   -Dtools= -Dbuild-tests=false -Dvalgrind=disabled -Dvideo-codecs= -Dglvnd=enabled
-  -Dmicrosoft-clc=disabled)
+  -Dmicrosoft-clc=disabled -Dlibunwind=disabled -Dlmsensors=disabled)
+# The drivers' settings; the shader compilers come from the tools build.
+_drivers=(-Dllvm=disabled -Dspirv-tools=disabled -Dmesa-clc=system -Dprecomp-compiler=system
+  --native-file tools.ini)
 
 build() {
   export MESA_GIT_SHA1_OVERRIDE=$_commit
-  meson setup mesa b64 "${_options[@]}" --libdir=lib
+  # The CL compilers run on the build machine and need LLVM.
+  meson setup mesa tools "${_options[@]}" --libdir=lib -Dllvm=enabled
+  ninja -C tools -j "${OMARCHY_BUILD_JOBS:-$(nproc)}" \
+    src/compiler/clc/mesa_clc src/compiler/spirv/vtn_bindgen2 src/asahi/clc/asahi_clc
+  printf '%s\n' '[binaries]' \
+    "mesa_clc = '$srcdir/tools/src/compiler/clc/mesa_clc'" \
+    "vtn_bindgen2 = '$srcdir/tools/src/compiler/spirv/vtn_bindgen2'" \
+    "asahi_clc = '$srcdir/tools/src/asahi/clc/asahi_clc'" > tools.ini
+
+  meson setup mesa b64 "${_options[@]}" "${_drivers[@]}" --libdir=lib
   meson compile -C b64 -j "${OMARCHY_BUILD_JOBS:-$(nproc)}"
 
   printf '%s\n' '[binaries]' \
     "c = ['gcc', '-m32']" "cpp = ['g++', '-m32']" "ar = 'ar'" "strip = 'strip'" \
-    "pkg-config = 'pkg-config'" "llvm-config = '/usr/bin/llvm-config32'" \
+    "pkg-config = 'pkg-config'" \
     '[properties]' "pkg_config_libdir = '/usr/lib32/pkgconfig:/usr/share/pkgconfig'" \
     '[host_machine]' "system = 'linux'" "cpu_family = 'x86'" "cpu = 'i686'" \
     "endian = 'little'" > i686.cross
-  # The CL compilers run on the build machine, so they come from a native file.
-  printf '%s\n' '[binaries]' \
-    "mesa_clc = '$srcdir/b64/src/compiler/clc/mesa_clc'" \
-    "vtn_bindgen2 = '$srcdir/b64/src/compiler/spirv/vtn_bindgen2'" \
-    "asahi_clc = '$srcdir/b64/src/asahi/clc/asahi_clc'" > tools.ini
-  meson setup mesa b32 "${_options[@]}" --libdir=lib32 --cross-file i686.cross \
-    --native-file tools.ini \
-    -Dmesa-clc=system -Dprecomp-compiler=system
+  meson setup mesa b32 "${_options[@]}" "${_drivers[@]}" --libdir=lib32 --cross-file i686.cross
   meson compile -C b32 -j "${OMARCHY_BUILD_JOBS:-$(nproc)}"
 
   rm -rf stage
@@ -84,10 +95,15 @@ build() {
 }
 
 check() {
-  # Every library is x86, of the class its directory promises.
+  # Every library is x86, of the class its directory promises, and follows
+  # neither LLVM nor SPIRV-Tools.
   local library machine count=0
   while IFS= read -r -d '' library; do
     machine=$(LC_ALL=C readelf -h "$library" | sed -n 's/^ *Machine: *//p')
+    if LC_ALL=C readelf -d "$library" | grep -Eq 'NEEDED.*(libLLVM|libSPIRV-Tools|libsensors|libunwind)'; then
+      echo "Unexpected guest runtime dependency: $library" >&2
+      return 1
+    fi
     case $library in
       */usr/lib32/*) [[ $machine == 'Intel 80386' ]] ;;
       */usr/lib/*) [[ $machine == 'Advanced Micro Devices X86-64' ]] ;;
