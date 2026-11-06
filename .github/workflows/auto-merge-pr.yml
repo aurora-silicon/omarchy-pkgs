@@ -31,6 +31,8 @@ concurrency:
 
 jobs:
   auto-merge:
+    # Needs PKGS_BOT_TOKEN and the publish pipeline, which only omacom has.
+    if: github.repository == 'omacom/omarchy-pkgs'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
