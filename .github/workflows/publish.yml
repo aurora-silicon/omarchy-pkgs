@@ -31,6 +31,9 @@ on:
 
 jobs:
   changes:
+    # Publishing needs the omacom signing key and R2 bucket. A fork has
+    # neither, so it would only fail here. Every later job needs this one.
+    if: github.repository == 'omacom/omarchy-pkgs'
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.list.outputs.matrix }}
@@ -447,7 +450,7 @@ jobs:
           fi
   result:
     needs: [changes, publish]
-    if: always()
+    if: always() && github.repository == 'omacom/omarchy-pkgs'
     runs-on: ubuntu-latest
     steps:
       - run: |
