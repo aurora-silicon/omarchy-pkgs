@@ -1,51 +1,90 @@
 # Open replacement firmware for the Apple Video Decoder.
-# Built from AsahiLinux sources, without extracting proprietary firmware.
+# Built from the pinned Aurora source, without extracting proprietary firmware.
+# The Aurora fork adds avd-fw-v5-t2.bin, which the Linux driver loads on M5, M5 Pro/Max
+# and M4 Pro/Max; the AsahiLinux v0.1 tag stops at v5-t1.
 
 pkgname=avd-fw
-pkgver=0.1
+pkgver=0.1.aurora3
+_commit=6062e8516c0a751bc8e50f5d604a17395923189f
 pkgrel=1
 pkgdesc='Open replacement firmware for the Apple Video Decoder (AVD) on Apple Silicon'
 # This recipe uses the native ARM linker and serves Apple Silicon systems.
 # Restrict both builds and publication to aarch64.
 arch=('aarch64')
-url='https://github.com/AsahiLinux/avd-fw'
+url='https://github.com/aurora-silicon/avd-fw'
 license=('MIT')
 # clang cross-compiles to arm-none-eabi out of the box, so no arm-none-eabi
 # toolchain is required; llvm supplies llvm-objcopy, which meson.build looks
 # up by name to turn each linked ELF into a padded raw image.
-makedepends=('meson' 'clang' 'llvm')
+# LLVM 23 changes image bytes; the shared hash manifest requires LLVM 22.
+makedepends=('meson' 'clang22' 'llvm22' 'lld22' 'python')
 # !buildflags is load-bearing: makepkg's CFLAGS/LDFLAGS target the aarch64 host
 # and would be injected into a bare-metal Cortex-M3 build. !strip keeps makepkg
 # from running the host strip over raw firmware images.
 options=('!strip' '!debug' '!buildflags' '!lto')
-source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('2e131244275cb15c94243e41eec8a2a665ec895cfe3a818181549db991e62c67')
+source=("$pkgname-$_commit.tar.gz::https://codeload.github.com/aurora-silicon/avd-fw/tar.gz/$_commit")
+sha256sums=('49a631c8ba0c87bac187376bc642acaad1f62791dde6ed285fbc2bad21d60cf0')
 
 build() {
+  export PATH="/usr/lib/llvm22/bin:$PATH"
   # The cross file selects clang, pins the host machine to cortex-m3 and sets
   # libdir=lib, which lands the images in /usr/lib/firmware/apple.
   #
-  # Optimization is pinned to match upstream's Makefile (-O2). Meson's default
-  # buildtype is "debug" (-O0 -g), which would ship unoptimized firmware; the
-  # MMIO accessors in src/util.c go through a volatile typedef, so -O2 cannot
-  # elide register reads or writes.
+  # Upstream defaults match Make (-O2, no debug) for reproducible images.
   meson setup \
-    --cross-file "$pkgname-$pkgver/llvm.ini" \
+    --cross-file "$pkgname-$_commit/llvm.ini" \
     --prefix=/usr \
-    -Doptimization=2 \
-    -Ddebug=false \
-    "$pkgname-$pkgver" build
+    "$pkgname-$_commit" build
 
   meson compile -C build
 }
 
+check() {
+  export PATH="/usr/lib/llvm22/bin:$PATH"
+  python - <<'CHECK'
+from pathlib import Path
+import hashlib
+import struct
+# clang 22, upstream Make and Meson defaults must produce these exact images.
+expected = [
+    ('v2-t0', 0xc000, '0db99c023d91e89e866d763229912e373cb0cfd5b91f46603df9d926ce036967'),
+    ('v3-t0', 0x10000, 'fc5219b2166e114fcd88898a8b2fb93fadfa8406dfb2c63c4d48c1b75adb49a9'),
+    ('v3-t1', 0x10000, '6d7f74406e93b9e0b6b6cf7bd630b5669a2e8b43a143d6abaaa85c1f93b02e34'),
+    ('v3-t2', 0x10000, '7bc2f5a30543331be6050ed2bb68198139e905b42c4622724b50cf8bf59e531a'),
+    ('v4-t0', 0x12000, 'adedf50ff0cb7ad8db539126585afab1d2fd83a82cd3ed2d3f7e0ec6d06723e2'),
+    ('v5-t0', 0x10000, 'aaa50276a9cc2320cb0ee6633319e82a54cf339018c03e22f33961a336bc61d1'),
+    ('v5-t1', 0x12000, '6490420bc7c0156686aface9057815849a4e4a823a0bef7a82f9274144c03343'),
+    ('v5-t2', 0x12000, '585f0a54c47078cb1c8c5928d7937dbcb99391aab53cec8f712af30c15071d5f'),
+]
+for name, size, expected_hash in expected:
+    files = list(Path('build').rglob('avd-fw-' + name + '.bin'))
+    assert len(files) == 1 and files[0].stat().st_size == size, name
+    firmware = files[0].read_bytes()
+    actual_hash = hashlib.sha256(firmware).hexdigest()
+    print(f"{actual_hash}  {files[0].name}", flush=True)
+    if actual_hash != expected_hash:
+        raise SystemExit(f"{name}: expected {expected_hash}, got {actual_hash}; check the clang toolchain")
+    elf = (Path('build') / ('avd-fw-' + name + '.elf')).read_bytes()
+    assert elf[:6] == b'\x7fELF\x01\x01' and struct.unpack_from('<H', elf, 18)[0] == 40
+    stack, reset = struct.unpack_from('<II', firmware)
+    entry = struct.unpack_from('<I', elf, 24)[0]
+    assert stack and stack % 8 == 0 and reset & 1 and reset == entry, name
+    assert 0 < (reset & ~1) < size, name
+CHECK
+}
+
 package() {
+  export PATH="/usr/lib/llvm22/bin:$PATH"
   meson install -C build --destdir "$pkgdir"
+  # Retain the exact linked symbols alongside the open firmware.
+  for elf in build/avd-fw-*.elf; do
+    install -Dm644 "$elf" "$pkgdir/usr/lib/debug/firmware/apple/${elf##*/}"
+  done
 
   # meson installs custom_target outputs 0755; these are firmware blobs, not
   # programs, and every other firmware file on the system is 0644.
   chmod 644 "$pkgdir"/usr/lib/firmware/apple/*.bin
 
-  install -Dm644 "$pkgname-$pkgver/LICENSE" \
+  install -Dm644 "$pkgname-$_commit/LICENSE" \
     "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }
